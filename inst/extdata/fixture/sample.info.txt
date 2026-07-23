@@ -1,0 +1,4 @@
+ethnicity_abbr
+AFR
+AFR
+EAS

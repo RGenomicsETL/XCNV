@@ -1,0 +1,37 @@
+Package: XCNV
+Type: Package
+Title: Copy Number Variant Annotation and Transparent Scoring
+Version: 0.0.0.9000
+Authors@R: c(
+    person("Sounkou Mahamane", "Toure", email = "sounkou-bioinfo@users.noreply.github.com", role = c("aut", "cre")),
+    person("Lu", "Zhang", role = "ctb"),
+    person("Jing", "Shi", role = "ctb"),
+    person("Jing", "Ouyang", role = "ctb"),
+    person("Rui", "Zhang", role = "ctb"),
+    person("Yan", "Tao", role = "ctb"),
+    person("Dong", "Yuan", role = "ctb"),
+    person("Cong", "Lv", role = "ctb"),
+    person("Rui", "Wang", role = "ctb"),
+    person("Bing", "Ning", role = "ctb"),
+    person("Richard", "Roberts", role = "ctb"),
+    person("William", "Tong", role = "ctb"),
+    person("Zhi", "Liu", role = "ctb"),
+    person("Tao", "Shi", role = "ctb")
+    )
+Description: Provides bedtools-free copy-number-variant annotation, a portable evaluator for the published X-CNV model contract of Zhang et al. (2021), and independently authored, provenance-first scoring under the ACMG and ClinGen 2019 constitutional copy-number-variant standard. Large scientific resources and trained models remain outside the package payload.
+License: GPL (>= 2)
+URL: https://github.com/RGenomicsETL/XCNV, https://github.com/kbvstmd/XCNV
+BugReports: https://github.com/RGenomicsETL/XCNV/issues
+Depends: R (>= 4.1.0)
+Imports:
+    data.table,
+    DBI,
+    duckdb
+Suggests:
+    roxygen2,
+    tinytest,
+    knitr,
+    rmarkdown
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 8.0.0

@@ -1,0 +1,6 @@
+source_id	purpose	assembly	current_release	version_policy	landing_url	redistribution_status
+clingen_dosage	established dosage-sensitive genes and regions	GRCh37,GRCh38	nightly	stage an explicitly dated nightly file	https://search.clinicalgenome.org/kb/downloads	review ClinGen download terms before redistribution
+gencode	protein-coding genes and exon/transcript geometry	GRCh38.p14	50	pin numbered release and exact file	https://www.gencodegenes.org/human/release_50.html	open access; retain attribution and release
+gnomad_sv	population structural-variant evidence	GRCh38	4.1	pin numbered release and exact callset/table	https://gnomad.broadinstitute.org/downloads	review gnomAD terms and dataset notices before redistribution
+ncbi_refseq	protein-coding genes and transcript geometry	GRCh37,GRCh38	assembly-specific	pin NCBI annotation release and assembly accession	https://www.ncbi.nlm.nih.gov/refseq/annotation_euk/Homo_sapiens/	US government/public-resource terms vary by component; retain provenance
+dgv	population structural-variant evidence	GRCh37,GRCh38	snapshot	pin dated download and assembly	https://dgv.tcag.ca/dgv/app/downloads	review DGV terms before redistribution

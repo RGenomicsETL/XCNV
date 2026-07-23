@@ -1,0 +1,4 @@
+V1	V2	V3
+1	S1	AFR
+1	S2	EAS
+2	S3	EAS

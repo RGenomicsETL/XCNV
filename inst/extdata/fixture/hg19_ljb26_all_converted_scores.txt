@@ -1,0 +1,4 @@
+SIFT_pred	Polyphen2_HDIV_pred	Polyphen2_HVAR_pred	LRT_pred	MutationTaster_pred	MutationAssessor_pred	FATHMM_pred	RadialSVM_pred	LR_pred	VEST3_score	CADD_phred	GERP++_RS	phyloP46way_placental	phyloP100way_vertebrate	SiPhy_29way_logOdds
+1	0	1	0	1	0	1	0	1	0.1	10	1	2	3	4
+0	1	0	1	0	1	0	1	0	0.2	20	2	3	4	5
+1	1	1	1	1	1	1	1	1	0.3	30	.	.	.	.

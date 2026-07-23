@@ -1,80 +1,169 @@
-# 1. Introduction
- X-CNV is a tool to predict CNV pathogenicity using an XGBoost classifier.<br><br>
- X-CNV calculates a meta-voting prediction (MVP) score to quantitatively evaluate disease-causing probability. It consists of the most comprehensive CNV data and annotations by integrating various publicly available genetic variant repositories. The features covering the genomics, genome region, variation types, and population genetics properties are taken into account to boost the prediction power. More importantly, a meta-voting prediction (MVP) score is proposed to measure the CNV pathogenic effect quantitatively, which can be used to determine the CNV pathogenicity.The reference genome version used by X-CNV is GRCh37/hg19. <br>
- Cite:Zhang L, Shi J, Ouyang J, Zhang R, Tao Y, Yuan D, Lv C, Wang R, Ning B, Roberts R, Tong W, Liu Z, Shi T. X-CNV: genome-wide prediction of the pathogenicity of copy number variations. Genome Med. 2021 Aug 18;13(1):132. doi: 10.1186/s13073-021-00945-4. PMID: 34407882.
-# 2. Requirements
- The local version X-CNV requires two R packages, data.table and xgboost(your may get issues when you install the xgboost packages you can see the https://github.com/kbvstmd/XCNV/issues/1 for help), and Bedtools v2.26.0. If the R packages and bedtools cannot be installed automatically, users can install them manually. The executable file of bedtools should be placed in ./tools/. ## Memory limit >=8G
-# 3. Installation
-```bash
-git clone https://github.com/kbvstmd/XCNV.git
-cd XCNV
-sh Install.sh
+XCNV
+================
+Sounkou Mahamane Toure
+
+- [XCNV](#xcnv)
+  - [Install from this checkout](#install-from-this-checkout)
+  - [R-native API](#r-native-api)
+  - [Portable model, no runtime
+    XGBoost](#portable-model-no-runtime-xgboost)
+  - [ACMG/ClinGen 2019 evidence
+    scoring](#acmgclingen-2019-evidence-scoring)
+  - [Deterministic fixture](#deterministic-fixture)
+  - [Citation](#citation)
+  - [Upstream credit](#upstream-credit)
+  - [ClassifyCNV is an external
+    reference](#classifycnv-is-an-external-reference)
+
+<!-- README.md is rendered from this file. -->
+
+# XCNV
+
+XCNV is a bedtools-free R package for copy-number-variant annotation and
+transparent scoring. It contains two deliberately separate lanes:
+
+1.  an X-CNV compatibility lane that preserves the GRCh37/hg19 feature
+    and MVP contracts described by Zhang et al. (2021); and
+2.  an independently authored ACMG/ClinGen 2019 constitutional-CNV
+    evidence and scoring lane with explicit source/release identifiers.
+
+The new R package code is GPL (\>= 2). The pinned historical X-CNV
+repository has no license grant, so its model, original scripts,
+training data, and annotation bundle remain outside the package and
+cannot be redistributed under that GPL without permission. See `LICENSE`
+for the file-level scope.
+
+## Install from this checkout
+
+The package itself performs no dependency installation, downloads, shell
+pipelines, or working-directory changes. Install dependencies in your
+project environment, then install the package:
+
+``` bash
+# Install declared R dependencies through your project or system package manager.
+R CMD INSTALL .
 ```
-# 4. Usage and example
-## Usage:
-```bash
-./bin/XCNV prefix.bed
+
+The scientific resource bundle is not included. Obtain the resources
+independently and validate them explicitly:
+
+``` r
+resources <- XCNV::xcnv_resources("/path/to/xcnv-resources", require = "all")
 ```
-The output filename: prefix.output.csv
 
-## Example:
-```bash
-./bin/XCNV ./example_data/1.bed
+The exact resource contract and pinned compatibility scope are
+documented in
+[`docs/upstream-compatibility.md`](docs/upstream-compatibility.md).
+
+## R-native API
+
+``` r
+cnvs <- XCNV::read_cnv("input.bed")
+features <- XCNV::annotate_cnv(cnvs, resources)
+predictions <- XCNV::predict_cnv(cnvs, resources)
+XCNV::write_xcnv(predictions, "predictions.output.csv")
 ```
-The results can be seen in the 1.output.csv
 
-# 5. Input & output
-Input file format (The columns are separated by TAB key and the header is not required): <br><br>
+`run_xcnv()` is the file-compatible wrapper. It returns a data frame and
+only writes when `output` is explicitly supplied; it never writes beside
+the input. The R result names the numeric gain/loss code `Type.1`; the
+CSV wrapper emits the upstream duplicate `Type` header, which
+name-making readers expose as `Type.1`. The production overlap path uses
+DuckDB inequality joins, including reciprocal overlap predicates. A
+small ordinary-R implementation is retained only as an independent test
+oracle. The package does not compile, install, or execute bedtools.
 
-2   2222999 3000222 gain <br>
+## Portable model, no runtime XGBoost
 
-Column 1: The chromosome (no “chr”) <br>
-Column 2: Start <br>
-Column 3: End <br>
-Column 4: CNV type (gain or loss) <br>
+The installed package does not import or suggest XGBoost. Resource
+maintainers convert a separately obtained pinned model once:
 
-The output file has 35 columns and is provided as Comma-Separated Values (CSV) format. <br>
+``` bash
+Rscript tools/stage_xcnv_model.R \
+  /licensed/source/xcnv.model.Rdata \
+  /resource-pack/xcnv.portable.model.tsv
+```
 
-<table>
-    <thead>
-    <th >Columns</th>
-    <th >Description</th>
-    <th>Category</th>
-    </thead>
-    <tr><td>Chr</td><td>Chromosome</td><td>Input</td></tr>
-<tr><td>Start</td><td>Start position</td><td>Input</td></tr>
-<tr><td>End</td><td>End position</td><td>Input</td></tr>
-<tr><td>CNV type</td><td>CNV type (gain or loss)</td><td>Input</td></tr>
-<tr><td>FATHMM score</td><td>FATHMM Dnase score for the CNV region</td><td>Coding</td></tr>
-<tr><td>LR score</td><td>LR score for the CNV region</td><td>Coding</td></tr>
-<tr><td>LRT score</td><td>LRT Dnase score for the CNV region</td><td>Coding</td></tr>
-<tr><td>MutationAssessor score</td><td>MutationAssessor score for the CNV region</td><td>Coding</td></tr>
-<tr><td>MutationTaster score</td><td>MutationTaster score for the CNV region</td><td>Coding</td></tr>
-<tr><td>Polyphen2-HDIV score</td><td>Polyphen2_HDIV score for the CNV region</td><td>Coding</td></tr>
-<tr><td>Polyphen2-HVAR score</td><td>Polyphen2_HVAR score for the CNV region</td><td>Coding</td></tr>
-<tr><td>RadialSVM score</td><td>RadialSVM Dnase score for the CNV region</td><td>Coding</td></tr>
-<tr><td>SIFT score</td><td>SIFT Dnase score for the CNV region</td><td>Coding</td></tr>
-<tr><td>VEST3 score</td><td>VEST3 score for the CNV region</td><td>Coding</td></tr>
-<tr><td>pLI</td><td>Probability of being loss-of-function intolerant</td><td>Coding</td></tr>
-<tr><td>Episcore</td><td>A computational method to predict haploinsufficiency leveraging epigenomic data from a broad range of tissue and cell types by machine learning methods.</td><td>Coding</td></tr>
-<tr><td>GHIS</td><td>An integrative approach to predicting haploinsufficient genes</td><td>Coding</td></tr>
-<tr><td>CADD score</td><td>Average CADD score for the CNV region</td><td>Genome-wide</td></tr>
-<tr><td>GERP</td><td>GERP++_RS Dnase score for the CNV region</td><td>Genome-wide</td></tr>
-<tr><td>phyloP100way</td><td>phyloP100way_vertebrate score for the CNV region</td><td>Genome-wide</td></tr>
-<tr><td>phyloP46way</td><td>phyloP46way_placental score for the CNV region</td><td>Genome-wide</td></tr>
-<tr><td>SiPhy29way</td><td>SiPhy_29way_logOdds score for the CNV region</td><td>Genome-wide</td></tr>
-<tr><td>cdts-1st</td><td>The coverage ratio between  CDTS percentile < 1% and the CNV region</td><td>Noncoding</td></tr>
-<tr><td>cdts-5th</td><td>The coverage ratio between  CDTS percentile < 5% and the CNV region</td><td>Noncoding</td></tr>
-<tr><td>pELS</td><td>The coverage of proximal enhancer-like sequence (pELS) within the CNV region</td><td>Noncoding</td></tr>
-<tr><td>CTCF-bound</td><td>The coverage of CTCF-bound sequence within the CNV region</td><td>Noncoding</td></tr>
-<tr><td>PLS</td><td>The coverage of promoter-like sequence within the CNV region</td><td>Noncoding</td></tr>
-<tr><td>dELS</td><td>The coverage of distal enhancer-like sequence within the CNV region</td><td>Noncoding</td></tr>
-<tr><td>CTCF-only</td><td>The coverage of CTCF-only sequence within the CNV region</td><td>Noncoding</td></tr>
-<tr><td>DNase-H3K4me3</td><td>The coverage of DNase-H3K4me3 sequence within the CNV region</td><td>Noncoding</td></tr>
-<tr><td>gain-PAF</td><td>Population allele frequency for duplication</td><td>Universal</td></tr>
-<tr><td>Length</td><td>CNV length</td><td>Universal</td></tr>
-<tr><td>loss-PAF</td><td>Population allele frequency for deletion</td><td>Universal</td></tr>
-<tr><td>Type.1</td><td>CNV type (gain or loss code as 1 or 0)</td><td>Universal</td></tr>
-<tr><td>MVP_score</td><td>The MVP score</td><td>Output</td></tr>
+Staging requires XGBoost and emits a tabular tree plus a receipt. Before
+publication it differentially evaluates 1,024 deterministic probe rows
+against the source booster. Runtime prediction validates and evaluates
+only the stable `xcnv-tree-v1` artifact. A derived model remains subject
+to the source model’s rights; conversion does not create redistribution
+permission.
 
-</table>
+## ACMG/ClinGen 2019 evidence scoring
+
+`score_cnv_2019()` consumes an evidence relation rather than scraping
+prose or silently choosing clinical assertions. Every row must identify
+its CNV, loss/gain context, criterion, score, source, source release,
+and evidence record:
+
+``` r
+evidence <- data.frame(
+  cnv_id = c("case-1", "case-1"),
+  cnv_type = c("loss", "loss"),
+  criterion = c("2A", "4A"),
+  score = c(1, 0.45),
+  source_id = c("ClinGen", "PMID"),
+  source_release = c("2026-07-21", "31690835"),
+  evidence_id = c("dosage:GENE", "published-case:1")
+)
+XCNV::score_cnv_2019(evidence)
+XCNV::score_cnv_2019(evidence, detail = "groups")
+```
+
+The second call exposes pre-cap and applied criterion-group scores. The
+package does not treat X-CNV’s statistical score as an ACMG criterion
+and does not let a prediction model admit evidence.
+
+`derive_cnv_2019_evidence()` is the first objective annotation provider.
+From explicit gene and ClinGen dosage relations it derives only section
+1 genomic content, section 2A complete containment of an established
+HI/TS gene or region, and section 3 protein-coding gene count. It does
+not guess partial-gene effects, phenotype match, segregation,
+inheritance, population evidence, or case-level assertions. Those enter
+as separately provenance-labelled evidence relations.
+
+`cnv_resource_sources()` lists the source authorities used to build
+current annotation packs. ClinGen dosage files are nightly, while
+numbered resources such as GENCODE 50 and gnomAD SV 4.1 are pinned
+explicitly. Downloads are a staging action with caller-supplied SHA-256,
+never package installation work.
+
+## Deterministic fixture
+
+A small synthetic fixture is bundled for tests and examples only. It is
+not the published annotation set or model:
+
+``` r
+fixture <- XCNV::xcnv_fixture_resources()
+XCNV::predict_cnv(
+  data.frame(chr = "1", start = 100L, end = 199L, type = "gain"),
+  fixture
+)
+```
+
+## Citation
+
+Please cite Zhang et al. (2021), *Genome Medicine* 13:132,
+[doi:10.1186/s13073-021-00945-4](https://doi.org/10.1186/s13073-021-00945-4).
+See `citation("XCNV")` for the package citation entry.
+
+## Upstream credit
+
+This package is a compatibility-oriented R interface, not a claim of a
+new scientific algorithm. The upstream authors and the Zhang et
+al. publication remain credited. See `NEWS.md` and the
+compatibility/design note for the supported subset and known parity
+gaps.
+
+## ClassifyCNV is an external reference
+
+Genotek ClassifyCNV commit `148757c4d6cbfb8d60878535686f40219b63a7a8` is
+useful for differential tests, but its license allows academic/research
+use only and prohibits modification and redistribution without
+permission. No ClassifyCNV code or bundled database is copied here. A
+distributed GPL-compatible port requires a separate written permission
+or relicensing grant from its copyright holders. The ACMG/ClinGen 2019
+lane above is independently authored from the published professional
+standard and uses separately staged source data.

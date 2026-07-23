@@ -1,0 +1,9 @@
+# format=xcnv-tree-v1
+# objective=reg:logistic
+# base_score=0.5
+# feature_names=Type
+# source_kind=synthetic-test-only
+tree_id	node_id	feature	threshold	yes_id	no_id	missing_id	leaf_value
+0	0	Type	0.5	1	2	1	NA
+0	1	NA	NA	NA	NA	NA	-0.59
+0	2	NA	NA	NA	NA	NA	0.5

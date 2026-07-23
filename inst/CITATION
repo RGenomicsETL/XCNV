@@ -1,0 +1,35 @@
+citHeader("Please cite the X-CNV method and the ACMG/ClinGen CNV standard when using the corresponding package lanes:")
+
+bibentry(
+  bibtype = "Article",
+  title = "X-CNV: genome-wide prediction of the pathogenicity of copy number variations",
+  author = c(
+    person("Lu", "Zhang"), person("Jing", "Shi"), person("Jing", "Ouyang"),
+    person("Rui", "Zhang"), person("Yan", "Tao"), person("Dong", "Yuan"),
+    person("Cong", "Lv"), person("Rui", "Wang"), person("Bing", "Ning"),
+    person("Richard", "Roberts"), person("William", "Tong"),
+    person("Zhi", "Liu"), person("Tao", "Shi")
+  ),
+  journal = "Genome Medicine",
+  year = "2021",
+  volume = "13",
+  number = "1",
+  pages = "132",
+  doi = "10.1186/s13073-021-00945-4",
+  pmid = "34407882"
+)
+
+bibentry(
+  bibtype = "Article",
+  title = "Technical standards for the interpretation and reporting of constitutional copy-number variants: a joint consensus recommendation of the American College of Medical Genetics and Genomics (ACMG) and the Clinical Genome Resource (ClinGen)",
+  author = c(
+    person("Erin Rooney", "Riggs"), person("Erica F", "Andersen"),
+    person("Athena M", "Cherry"), person("Christa Lese", "Martin")
+  ),
+  journal = "Genetics in Medicine",
+  year = "2020",
+  volume = "22",
+  pages = "245--257",
+  doi = "10.1038/s41436-019-0686-8",
+  pmid = "31690835"
+)

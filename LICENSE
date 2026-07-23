@@ -1,0 +1,23 @@
+XCNV package licensing scope
+
+The independently authored R package implementation under R/, tests/, man/,
+inst/ (except notices about external resources), DESCRIPTION, NAMESPACE,
+README.Rmd, README.md, NEWS.md, and the package maintenance scripts is licensed
+under the GNU General Public License version 2 or, at your option, any later
+version (GPL >= 2).
+
+This grant does not apply to the historical upstream XCNV files under data/ or
+example_data/, including the trained model.
+The pinned upstream XCNV repository contains no license grant. Those historical
+files are excluded from the built R package and remain release-gated pending
+permission from their copyright holders.
+
+This grant also does not apply to Genotek ClassifyCNV commit
+148757c4d6cbfb8d60878535686f40219b63a7a8. Its LICENSE.md permits
+academic/research use only and explicitly prohibits modification and
+redistribution without author permission. No ClassifyCNV source code or bundled
+database is included in this package. A GPL-compatible port requires a separate
+written permission or relicensing grant from the ClassifyCNV copyright holders.
+
+External scientific resources retain their own terms. See
+inst/RESOURCE-LICENSES.md.
