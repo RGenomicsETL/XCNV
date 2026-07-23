@@ -55,7 +55,17 @@
   context$counter <- 0L
   context$con <- NULL
   if (identical(backend, "duckdb")) {
-    context$con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+    config <- list()
+    if (is.null(getOption("duckdb.extension_directory")) &&
+        !nzchar(Sys.getenv("DUCKDB_EXTENSION_DIRECTORY", unset = ""))) {
+      # DuckDB >= 1.5 warns when it chooses the session cache itself. XCNV
+      # neither installs nor loads extensions, so choose that same cache
+      # explicitly without changing the caller's global configuration.
+      config$extension_directory <- file.path(tempdir(), "duckdb", "extensions")
+    }
+    context$con <- DBI::dbConnect(
+      duckdb::duckdb(config = config), dbdir = ":memory:"
+    )
   }
   context
 }
