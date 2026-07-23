@@ -4,13 +4,14 @@
 \alias{validate_xcnv_resources}
 \title{Validate an X-CNV resource bundle}
 \usage{
-validate_xcnv_resources(path = NULL, require = c("annotations", "model"))
+validate_xcnv_resources(path = NULL, require = "annotations")
 }
 \arguments{
 \item{path}{Resource directory. If omitted, \code{XCNV_RESOURCE_DIR} must be set.}
 
-\item{require}{Resource groups to require: \code{"annotations"}, \code{"model"}, or
-\code{"all"}.}
+\item{require}{Resource groups to require: \code{"annotations"} (the default),
+\code{"model"}, or \code{"all"}. A model file is required only when \code{"model"} or
+\code{"all"} is requested; otherwise prediction uses the bundled model.}
 }
 \value{
 An object of class \code{xcnv_resources}, containing the normalized root

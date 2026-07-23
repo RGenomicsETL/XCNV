@@ -5,8 +5,10 @@
 This package is being developed against the Zhang et al. (2021) X-CNV
 executable in the upstream repository `https://github.com/kbvstmd/XCNV` at
 pinned commit `2237e765fa9c31555dd8f4591b7f2693cff1ff8a` (19 October 2021).
-The historical files under `data/` remain a reviewable compatibility reference
-and are excluded from built packages.
+The historical files under `tools/upstream/data/` remain a reviewable
+compatibility reference and are excluded from built packages. They are kept
+outside the package `data/` directory so a source install does not mistake raw
+annotations or legacy serializations for R datasets.
 
 The supported subset in this first vertical slice is the published four-column
 BED-like input (`chromosome`, `start`, `end`, `gain`/`loss`), GRCh37/hg19

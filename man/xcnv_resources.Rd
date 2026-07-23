@@ -4,7 +4,7 @@
 \alias{xcnv_resources}
 \title{Discover an X-CNV resource bundle}
 \usage{
-xcnv_resources(path = NULL, require = c("annotations", "model"))
+xcnv_resources(path = NULL, require = "annotations")
 }
 \arguments{
 \item{path}{Resource directory, or \code{NULL} to use \code{XCNV_RESOURCE_DIR}.}

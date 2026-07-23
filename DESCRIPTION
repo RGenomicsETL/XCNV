@@ -3,7 +3,7 @@ Type: Package
 Title: Copy Number Variant Annotation and Transparent Scoring
 Version: 0.0.0.9000
 Authors@R: c(
-    person("Sounkou Mahamane", "Toure", email = "sounkou-bioinfo@users.noreply.github.com", role = c("aut", "cre")),
+    person("Sounkou Mahamane", "Toure", email = "sounkoutoure@gmail.com", role = c("aut", "cre")),
     person("Lu", "Zhang", role = "ctb"),
     person("Jing", "Shi", role = "ctb"),
     person("Jing", "Ouyang", role = "ctb"),

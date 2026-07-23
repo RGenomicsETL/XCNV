@@ -56,12 +56,13 @@ xcnv_resource_manifest <- function() {
 #' working directory.
 #'
 #' @param path Resource directory. If omitted, `XCNV_RESOURCE_DIR` must be set.
-#' @param require Resource groups to require: `"annotations"`, `"model"`, or
-#'   `"all"`.
+#' @param require Resource groups to require: `"annotations"` (the default),
+#'   `"model"`, or `"all"`. A model file is required only when `"model"` or
+#'   `"all"` is requested; otherwise prediction uses the bundled model.
 #' @return An object of class `xcnv_resources`, containing the normalized root
 #'   and resolved resource paths.
 #' @export
-validate_xcnv_resources <- function(path = NULL, require = c("annotations", "model")) {
+validate_xcnv_resources <- function(path = NULL, require = "annotations") {
   require <- match.arg(require, c("annotations", "model", "all"), several.ok = TRUE)
   if ("all" %in% require) {
     require <- c("annotations", "model")
@@ -80,7 +81,7 @@ validate_xcnv_resources <- function(path = NULL, require = c("annotations", "mod
       hit <- file.path(root, .xcnv_resource_spec$file[.xcnv_resource_spec$key == key])
       files[[key]] <- if (file.exists(hit)) hit else NA_character_
     }
-    if (key %in% needed && key != "model" && is.na(files[[key]])) {
+    if (key %in% needed && is.na(files[[key]])) {
       missing <- c(missing, .xcnv_resource_spec$file[.xcnv_resource_spec$key == key])
     }
   }
@@ -104,7 +105,7 @@ validate_xcnv_resources <- function(path = NULL, require = c("annotations", "mod
 #' @param require Resource groups to require.
 #' @return An object of class `xcnv_resources`.
 #' @export
-xcnv_resources <- function(path = NULL, require = c("annotations", "model")) {
+xcnv_resources <- function(path = NULL, require = "annotations") {
   validate_xcnv_resources(path = path, require = require)
 }
 

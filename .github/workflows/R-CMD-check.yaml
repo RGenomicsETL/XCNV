@@ -27,6 +27,8 @@ jobs:
         with:
           extra-packages: any::rcmdcheck
           needs: check
+      - name: Render README end to end
+        run: make readme && git diff --exit-code -- README.md
       - name: Check package
         run: rcmdcheck::rcmdcheck(args = "--no-manual", error_on = "warning")
         shell: Rscript {0}

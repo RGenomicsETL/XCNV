@@ -47,7 +47,8 @@ write_xcnv <- function(x, output) {
 #'
 #' @param input A CNV path, data frame, or matrix.
 #' @param resources An `xcnv_resources` object or explicit resource directory.
-#' @param model A model object/path, or `NULL` to use the resource bundle model.
+#' @param model A model object/path, or `NULL` to use a resource-bundle
+#'   override when present and otherwise the bundled published model.
 #' @param output `NULL` to return results without writing, or one explicit CSV
 #'   path.
 #' @param overlap_backend Passed to `annotate_cnv()`.

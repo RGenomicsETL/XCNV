@@ -30,7 +30,7 @@ jobs:
           extra-packages: any::pkgdown
           needs: website
       - name: Build site
-        run: pkgdown::build_site_github_pages(new_process = FALSE)
+        run: pkgdown::build_site(new_process = FALSE)
         shell: Rscript {0}
       - name: Deploy site
         uses: JamesIves/github-pages-deploy-action@v4.6.9

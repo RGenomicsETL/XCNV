@@ -224,7 +224,7 @@ predict_cnv <- function(
   resources <- if (inherits(resources, "xcnv_resources")) {
     resources
   } else {
-    xcnv_resources(resources, require = if (is.null(model)) "all" else "annotations")
+    xcnv_resources(resources, require = "annotations")
   }
   if (is.null(model)) {
     model_path <- resources$files$model

@@ -4,7 +4,7 @@ rd:
 	Rscript -e 'roxygen2::roxygenize(load_code = "source")'
 
 readme:
-	Rscript -e 'rmarkdown::render("README.Rmd", output_file = "README.md", quiet = TRUE)'
+	Rscript -e 'lib <- tempfile("xcnv-readme-lib-"); dir.create(lib); on.exit(unlink(lib, recursive = TRUE), add = TRUE); utils::install.packages(".", repos = NULL, type = "source", lib = lib, quiet = TRUE); .libPaths(c(lib, .libPaths())); rmarkdown::render("README.Rmd", output_file = "README.md", quiet = TRUE)'
 
 test:
 	Rscript -e 'tinytest::build_install_test(".")'

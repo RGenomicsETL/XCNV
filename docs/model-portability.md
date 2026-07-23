@@ -2,7 +2,7 @@
 
 Status: current validation record for the bundled published model.
 
-The historical `data/xcnv.model.Rdata` at XCNV commit
+The historical `tools/upstream/data/xcnv.model.Rdata` at XCNV commit
 `2237e765fa9c31555dd8f4591b7f2693cff1ff8a` contains an XGBoost 1.2.0
 `reg:logistic` classifier with 30 named features, one tree, and 41 nodes.
 Because old XGBoost serialized objects are not stable interchange files,

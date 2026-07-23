@@ -169,7 +169,8 @@ provides the same workflow as one call and writes only when an output
 path is supplied.
 
 The compatibility contract, coordinate conventions, and current gaps are
-in [`docs/upstream-compatibility.md`](docs/upstream-compatibility.md).
+in
+[`docs/upstream-compatibility.md`](https://github.com/RGenomicsETL/XCNV/blob/main/docs/upstream-compatibility.md).
 
 ## Citation
 

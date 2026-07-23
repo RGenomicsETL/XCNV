@@ -26,7 +26,8 @@ xcnv(
 
 \item{resources}{An \code{xcnv_resources} object or explicit resource directory.}
 
-\item{model}{A model object/path, or \code{NULL} to use the resource bundle model.}
+\item{model}{A model object/path, or \code{NULL} to use a resource-bundle
+override when present and otherwise the bundled published model.}
 
 \item{output}{\code{NULL} to return results without writing, or one explicit CSV
 path.}
