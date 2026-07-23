@@ -2,8 +2,9 @@
 ^\.gitignore$
 ^LICENSE$
 ^\.github$
-^data$
-^data/
+^_pkgdown\.yml$
+^pkgdown$
+^data/(CNV_unification\.R|XCNV\.R|all\.cnvs\.Rdata|compute\..*\.R|install_packages\.R|gencode_v19_features\.bed|genome\.txt|hg19-ccREs\.bed|merged\.cnv\.sites\.bed|sample\.info\.txt|xcnv\.model\.Rdata)$
 ^tools$
 ^tools/
 ^example_data$

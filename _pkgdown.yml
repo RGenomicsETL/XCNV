@@ -1,0 +1,45 @@
+url: https://rgenomicsetl.github.io/XCNV/
+destination: pkgdown
+
+template:
+  bootstrap: 5
+
+navbar:
+  structure:
+    left: [intro, reference, news, design]
+    right: [search, github, r_universe]
+  components:
+    design:
+      text: Design
+      href: https://github.com/RGenomicsETL/XCNV/blob/main/docs/upstream-compatibility.md
+    r_universe:
+      text: R-universe
+      href: https://rgenomicsetl.r-universe.dev/XCNV
+
+reference:
+  - title: X-CNV annotation and prediction
+    contents:
+      - read_cnv
+      - validate_cnv
+      - annotate_cnv
+      - predict_cnv
+      - run_xcnv
+      - write_xcnv
+      - xcnv
+  - title: Model and resources
+    contents:
+      - xcnv_bundled_model
+      - load_xcnv_model
+      - xcnv_portable_model
+      - xcnv_resources
+      - validate_xcnv_resources
+      - xcnv_resource_manifest
+      - xcnv_fixture_resources
+      - xcnv_real_example
+      - cnv_resource_sources
+  - title: ACMG and ClinGen 2019 scoring
+    contents:
+      - cnv_2019_criteria
+      - derive_cnv_2019_evidence
+      - score_cnv_2019
+      - classify_cnv_score

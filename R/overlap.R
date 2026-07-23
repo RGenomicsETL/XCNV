@@ -186,12 +186,19 @@
   # published file is point-like; accepting BED-like third coordinates also
   # makes the boundary explicit without changing the point case.
   third <- suppressWarnings(as.integer(as.character(x$id)))
-  is_bed_interval <- all(!is.na(third))
-  starts <- if (is_bed_interval) pos else pos - 1L
-  ends <- if (is_bed_interval) third else pos
+  point_like <- is.na(third) | third == pos
+  if (any(!point_like & third < pos)) {
+    stop("the LJB26 sites file has an interval end before its start", call. = FALSE)
+  }
+  starts <- ifelse(point_like, pos - 1L, pos)
+  ends <- ifelse(point_like, pos, third)
+  site_id <- suppressWarnings(as.integer(as.character(x$site_id)))
+  if (anyNA(site_id) || any(site_id < 1L)) {
+    stop("the LJB26 sites file has invalid numeric site indices", call. = FALSE)
+  }
   data.frame(
     chr = x$chr, start = starts, end = ends,
-    site_id = suppressWarnings(as.integer(as.character(x$site_id))),
+    site_id = site_id,
     stringsAsFactors = FALSE
   )
 }
@@ -232,12 +239,18 @@
 }
 
 .read_merged_sample_info <- function(path) {
-  x <- .read_table(path, header = TRUE)
+  x <- .read_table(path, header = FALSE)
   if (ncol(x) < 3L) {
     stop("merged.cnv.sample.info.txt must have site, sample, and ethnicity columns", call. = FALSE)
   }
   x <- x[, 1:3, drop = FALSE]
   names(x) <- c("site_id", "sample_id", "ethnicity")
+  if (nrow(x) && identical(
+    tolower(as.character(unlist(x[1L, ], use.names = FALSE))),
+    c("site_id", "sample_id", "ethnicity")
+  )) {
+    x <- x[-1L, , drop = FALSE]
+  }
   x$site_id <- as.character(x$site_id)
   x$sample_id <- as.character(x$sample_id)
   x$ethnicity <- as.character(x$ethnicity)
@@ -267,13 +280,17 @@
   names(missing_values) <- score_names[10:15]
   for (i in seq_len(nrow(a))) {
     idx <- pairs$b_id[pairs$a_id == i]
+    score_idx <- r$ljb_sites$site_id[idx]
+    if (any(score_idx > nrow(r$ljb_scores), na.rm = TRUE)) {
+      stop("the LJB26 sites file references a missing score row", call. = FALSE)
+    }
     for (j in seq_len(9L)) {
-      values <- suppressWarnings(as.numeric(r$ljb_scores[[j]][idx]))
+      values <- suppressWarnings(as.numeric(r$ljb_scores[[j]][score_idx]))
       # The executable counts positive records and divides by every -wao row.
       out[i, j] <- sum(!is.na(values) & values > 0) / length(values)
     }
     for (j in 10:15) {
-      values <- suppressWarnings(as.numeric(r$ljb_scores[[j]][idx]))
+      values <- suppressWarnings(as.numeric(r$ljb_scores[[j]][score_idx]))
       values[is.na(values)] <- missing_values[[j - 9L]]
       out[i, j] <- mean(values)
     }

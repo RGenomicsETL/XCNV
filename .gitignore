@@ -1,6 +1,7 @@
 *.tar.gz
 *.Rcheck/
 README.html
+pkgdown/
 .Rhistory
 .RData
 .Ruserdata

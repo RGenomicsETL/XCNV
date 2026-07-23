@@ -1,0 +1,2 @@
+cnv_id	clinvar_allele_id	variation_id	dbvar_accession	clinical_significance	review_status	grch38_chrom	grch38_start1	grch38_end1	grch37_chrom	grch37_start0	grch37_end0	cnv_type
+clinvar-72461	72461	57866	nsv530129	Pathogenic	criteria provided, single submitter	3	181710887	181748657	3	181428674	181466445	loss

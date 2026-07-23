@@ -105,9 +105,11 @@
 #' environment where XGBoost is installed.
 #'
 #' @param model A portable model object or path to an `xcnv-tree-v1` TSV file.
+#'   The bundled published model is used when omitted or `NULL`.
 #' @return A model object suitable for `predict_cnv()`.
 #' @export
-load_xcnv_model <- function(model) {
+load_xcnv_model <- function(model = NULL) {
+  if (is.null(model)) return(xcnv_bundled_model())
   if (!is.character(model) || length(model) != 1L || is.na(model) || !file.exists(model)) {
     if (is.list(model)) return(model)
     stop("'model' must be an existing model path or model object", call. = FALSE)
@@ -119,6 +121,27 @@ load_xcnv_model <- function(model) {
     )
   }
   .read_portable_model(model)
+}
+
+#' Return the bundled published X-CNV model
+#'
+#' @return A validated `xcnv_portable_model` object.
+#' @export
+xcnv_bundled_model <- function() {
+  data_environment <- new.env(parent = emptyenv())
+  loaded <- utils::data(
+    "xcnv_portable_model",
+    package = "XCNV",
+    envir = data_environment
+  )
+  if (!"xcnv_portable_model" %in% loaded) {
+    stop("the bundled X-CNV model is not available", call. = FALSE)
+  }
+  model <- data_environment$xcnv_portable_model
+  if (!inherits(model, "xcnv_portable_model")) {
+    stop("the bundled X-CNV model is invalid", call. = FALSE)
+  }
+  model
 }
 
 .model_feature_names <- function(model) {
@@ -188,7 +211,8 @@ load_xcnv_model <- function(model) {
 #'
 #' @param x A path, data frame, or matrix containing CNV records.
 #' @param resources An `xcnv_resources` object or an explicit resource directory.
-#' @param model A model object/path. If `NULL`, the model in `resources` is used.
+#' @param model A model object/path. If `NULL`, a model in `resources` is used
+#'   when present, otherwise the bundled published model is used.
 #' @param overlap_backend Passed to `annotate_cnv()`.
 #' @return A data frame containing the legacy annotation columns and a final
 #'   `MVP_score` column.
@@ -202,7 +226,14 @@ predict_cnv <- function(
   } else {
     xcnv_resources(resources, require = if (is.null(model)) "all" else "annotations")
   }
-  if (is.null(model)) model <- load_xcnv_model(resources$files$model)
+  if (is.null(model)) {
+    model_path <- resources$files$model
+    model <- if (!is.null(model_path) && !is.na(model_path)) {
+      load_xcnv_model(model_path)
+    } else {
+      xcnv_bundled_model()
+    }
+  }
   model <- if (is.character(model)) load_xcnv_model(model) else model
   features <- annotate_cnv(x, resources, overlap_backend = overlap_backend)
   matrix <- .feature_matrix(features, model)

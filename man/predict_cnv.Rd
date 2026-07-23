@@ -16,7 +16,8 @@ predict_cnv(
 
 \item{resources}{An \code{xcnv_resources} object or an explicit resource directory.}
 
-\item{model}{A model object/path. If \code{NULL}, the model in \code{resources} is used.}
+\item{model}{A model object/path. If \code{NULL}, a model in \code{resources} is used
+when present, otherwise the bundled published model is used.}
 
 \item{overlap_backend}{Passed to \code{annotate_cnv()}.}
 }

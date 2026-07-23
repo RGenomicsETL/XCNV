@@ -1,6 +1,5 @@
 ---
 title: "XCNV"
-author: "Sounkou Mahamane Toure"
 output:
   github_document:
     toc: true
@@ -9,138 +8,150 @@ output:
 
 <!-- README.md is rendered from this file. -->
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+
 # XCNV
 
-XCNV is a bedtools-free R package for copy-number-variant annotation and
-transparent scoring. It contains two deliberately separate lanes:
+XCNV annotates copy-number variants and evaluates the published X-CNV
+classifier without bedtools or a runtime XGBoost dependency. It also provides a
+separate ACMG/ClinGen 2019 lane in which every selected criterion remains a row
+that can be inspected, changed, and rescored.
 
-1. an X-CNV compatibility lane that preserves the GRCh37/hg19 feature and MVP
-   contracts described by Zhang et al. (2021); and
-2. an independently authored ACMG/ClinGen 2019 constitutional-CNV evidence and
-   scoring lane with explicit source/release identifiers.
+The implementation is table-oriented. DuckDB evaluates the genomic overlap and
+reciprocal-overlap joins; ordinary R owns input validation, feature reduction,
+the portable tree evaluator, and evidence scoring.
 
-The new R package code is GPL (>= 2). The pinned historical X-CNV repository has
-no license grant, so its model, original scripts, training data, and annotation
-bundle remain outside the package and cannot be redistributed under that GPL
-without permission. See `LICENSE` for the file-level scope.
-
-## Install from this checkout
-
-The package itself performs no dependency installation, downloads, shell
-pipelines, or working-directory changes. Install dependencies in your project
-environment, then install the package:
-
-```bash
-# Install declared R dependencies through your project or system package manager.
-R CMD INSTALL .
-```
-
-The scientific resource bundle is not included. Obtain the resources
-independently and validate them explicitly:
+## Installation
 
 ```r
-resources <- XCNV::xcnv_resources("/path/to/xcnv-resources", require = "all")
+install.packages(
+  "XCNV",
+  repos = c(
+    "https://rgenomicsetl.r-universe.dev",
+    "https://cloud.r-project.org"
+  )
+)
 ```
 
-The exact resource contract and pinned compatibility scope are documented in
+## A real ClinVar deletion
+
+The package includes a compact, case-limited annotation set for ClinVar allele
+72461: a pathogenic deletion containing `SOX2`. This is a real scientific
+example, not the synthetic fixture used by the test suite.
+
+```{r real-case}
+library(XCNV)
+
+example <- xcnv_real_example()
+example$clinvar[, c(
+  "clinvar_allele_id", "clinical_significance",
+  "grch38_chrom", "grch38_start1", "grch38_end1",
+  "grch37_chrom", "grch37_start0", "grch37_end0"
+)]
+```
+
+ClinVar publishes this record in both assemblies. X-CNV uses its GRCh37
+half-open interval. When a source provides only one assembly, lift it during
+resource staging—for example with Rduckhts' `rduckhts_liftover()`—and retain
+the source and destination coordinates beside the case.
+
+The following call evaluates all five X-CNV annotation families and the bundled
+published model:
+
+```{r real-prediction}
+prediction <- predict_cnv(example$cnv, example$resources)
+prediction[, c(
+  "Chr", "Start", "End", "Type",
+  "CDTS_1st", "CDTS_5th",
+  "gain.freq", "loss.freq",
+  "pLI", "Episcore", "GHIS", "MVP_score"
+)]
+```
+
+`MVP_score` is the X-CNV model output; XCNV does not relabel it as an ACMG
+criterion or clinical class.
+
+## Inspectable ACMG/ClinGen evidence
+
+The same real deletion completely contains the GENCODE v19 `SOX2` gene and its
+ClinGen haploinsufficiency record. The automatic provider derives only the
+objective content criteria it can establish from those relations:
+
+```{r real-evidence}
+cnv <- transform(
+  example$cnv,
+  cnv_id = example$clinvar$cnv_id,
+  cnv_type = type
+)
+evidence <- derive_cnv_2019_evidence(
+  cnv, example$genes, example$dosage
+)
+evidence[, c(
+  "criterion", "score", "source_id",
+  "source_release", "evidence_id"
+)]
+```
+
+The rows can be scored directly:
+
+```{r real-classification}
+score_cnv_2019(evidence)
+```
+
+Here criterion 2A supplies one point because the deletion completely contains
+an established haploinsufficient gene. The automatic provider does not invent
+phenotype, inheritance, segregation, population, case-report, or partial-gene
+evidence. Those require explicit additional evidence rows.
+
+## Published model without XGBoost
+
+The published classifier is one tree with 41 nodes. XCNV stores the tree as a
+small, validated tabular object and evaluates it directly:
+
+```{r model}
+model <- xcnv_bundled_model()
+data.frame(
+  trees = length(unique(model$nodes$tree_id)),
+  nodes = nrow(model$nodes),
+  features = length(model$feature_names)
+)
+
+model_data <- new.env(parent = emptyenv())
+data("xcnv_portable_model", package = "XCNV", envir = model_data)
+identical(model_data$xcnv_portable_model, model)
+```
+
+`tools/stage_xcnv_model.R` rebuilds this portable form from the original
+serialized booster and compares both evaluators on 1,024 deterministic feature
+rows. XGBoost is needed for that maintainer-only conversion, not for package
+installation or prediction.
+
+## Full annotation resources
+
+The bundled real example is deliberately valid only for ClinVar allele 72461.
+A general run uses a full GRCh37 resource directory:
+
+```r
+resources <- xcnv_resources("/path/to/xcnv-resources", require = "annotations")
+cnvs <- read_cnv("input.bed")
+predictions <- predict_cnv(cnvs, resources)
+write_xcnv(predictions, "predictions.output.csv")
+```
+
+`xcnv_resource_manifest()` lists the required files. `run_xcnv()` provides the
+same workflow as one call and writes only when an output path is supplied.
+
+The compatibility contract, coordinate conventions, and current gaps are in
 [`docs/upstream-compatibility.md`](docs/upstream-compatibility.md).
-
-## R-native API
-
-```r
-cnvs <- XCNV::read_cnv("input.bed")
-features <- XCNV::annotate_cnv(cnvs, resources)
-predictions <- XCNV::predict_cnv(cnvs, resources)
-XCNV::write_xcnv(predictions, "predictions.output.csv")
-```
-
-`run_xcnv()` is the file-compatible wrapper. It returns a data frame and only
-writes when `output` is explicitly supplied; it never writes beside the input.
-The R result names the numeric gain/loss code `Type.1`; the CSV wrapper emits
-the upstream duplicate `Type` header, which name-making readers expose as
-`Type.1`.
-The production overlap path uses DuckDB inequality joins, including reciprocal
-overlap predicates. A small ordinary-R implementation is retained only as an
-independent test oracle. The package does not compile, install, or execute
-bedtools.
-
-## Portable model, no runtime XGBoost
-
-The installed package does not import or suggest XGBoost. Resource maintainers
-convert a separately obtained pinned model once:
-
-```bash
-Rscript tools/stage_xcnv_model.R \
-  /licensed/source/xcnv.model.Rdata \
-  /resource-pack/xcnv.portable.model.tsv
-```
-
-Staging requires XGBoost and emits a tabular tree plus a receipt. Before
-publication it differentially evaluates 1,024 deterministic probe rows against
-the source booster. Runtime prediction validates and evaluates only the stable
-`xcnv-tree-v1` artifact. A derived model remains subject to the source model's
-rights; conversion does not create redistribution permission.
-
-## ACMG/ClinGen 2019 evidence scoring
-
-`score_cnv_2019()` consumes an evidence relation rather than scraping prose or
-silently choosing clinical assertions. Every row must identify its CNV,
-loss/gain context, criterion, score, source, source release, and evidence
-record:
-
-```r
-evidence <- data.frame(
-  cnv_id = c("case-1", "case-1"),
-  cnv_type = c("loss", "loss"),
-  criterion = c("2A", "4A"),
-  score = c(1, 0.45),
-  source_id = c("ClinGen", "PMID"),
-  source_release = c("2026-07-21", "31690835"),
-  evidence_id = c("dosage:GENE", "published-case:1")
-)
-XCNV::score_cnv_2019(evidence)
-XCNV::score_cnv_2019(evidence, detail = "groups")
-```
-
-The second call exposes pre-cap and applied criterion-group scores. The package
-does not treat X-CNV's statistical score as an ACMG criterion and does not let a
-prediction model admit evidence.
-
-`derive_cnv_2019_evidence()` is the first objective annotation provider. From
-explicit gene and ClinGen dosage relations it derives only section 1 genomic
-content, section 2A complete containment of an established HI/TS gene or
-region, and section 3 protein-coding gene count. It does not guess partial-gene
-effects, phenotype match, segregation, inheritance, population evidence, or
-case-level assertions. Those enter as separately provenance-labelled evidence
-relations.
-
-`cnv_resource_sources()` lists the source authorities used to build current
-annotation packs. ClinGen dosage files are nightly, while numbered resources
-such as GENCODE 50 and gnomAD SV 4.1 are pinned explicitly. Downloads are a
-staging action with caller-supplied SHA-256, never package installation work.
-
-## Deterministic fixture
-
-A small synthetic fixture is bundled for tests and examples only. It is not the
-published annotation set or model:
-
-```r
-fixture <- XCNV::xcnv_fixture_resources()
-XCNV::predict_cnv(
-  data.frame(chr = "1", start = 100L, end = 199L, type = "gain"),
-  fixture
-)
-```
 
 ## Citation
 
 Please cite Zhang et al. (2021), *Genome Medicine* 13:132,
 [doi:10.1186/s13073-021-00945-4](https://doi.org/10.1186/s13073-021-00945-4).
-See `citation("XCNV")` for the package citation entry.
-
-## Upstream credit
-
-This package is a compatibility-oriented R interface, not a claim of a new
-scientific algorithm. The upstream authors and the Zhang et al. publication
-remain credited. See `NEWS.md` and the compatibility/design note for the
-supported subset and known parity gaps.

@@ -43,6 +43,33 @@ expect_equal(names(predictions)[length(names(predictions))], "MVP_score")
 model <- load_xcnv_model(fixture$files$model)
 expect_true(inherits(model, "xcnv_portable_model"))
 expect_equal(model$model_type, "xcnv-tree-v1")
+bundled_model <- xcnv_bundled_model()
+expect_true(inherits(bundled_model, "xcnv_portable_model"))
+expect_equal(nrow(bundled_model$nodes), 41L)
+expect_identical(load_xcnv_model(), bundled_model)
+model_data <- new.env(parent = emptyenv())
+utils::data("xcnv_portable_model", package = "XCNV", envir = model_data)
+expect_identical(model_data$xcnv_portable_model, bundled_model)
+
+real_example <- xcnv_real_example()
+expect_identical(real_example$clinvar$clinvar_allele_id, 72461L)
+real_prediction <- predict_cnv(real_example$cnv, real_example$resources)
+expect_equal(real_prediction$MVP_score, 0.8537559, tolerance = 1e-7)
+expect_equal(real_prediction$pLI, 0.396696528099993, tolerance = 1e-12)
+real_cnv <- transform(
+  real_example$cnv,
+  cnv_id = real_example$clinvar$cnv_id,
+  cnv_type = type
+)
+real_evidence <- derive_cnv_2019_evidence(
+  real_cnv, real_example$genes, real_example$dosage
+)
+expect_identical(sort(real_evidence$criterion), c("1A", "2A", "3A"))
+expect_identical(
+  score_cnv_2019(real_evidence)$classification,
+  "pathogenic"
+)
+
 probe <- matrix(c(0, 1, NA_real_), ncol = 1L, dimnames = list(NULL, "Type"))
 expect_equal(
   XCNV:::.predict_portable_tree(model, probe),

@@ -2,8 +2,7 @@
 #'
 #' Return landing pages and release policies for resources used to construct a
 #' provenance-labelled CNV annotation pack. This function does not download
-#' data and does not assert that a source can be redistributed. Staging uses an
-#' explicit release URL and SHA-256 receipt.
+#' data. Staging records the selected release, assembly, and source URL.
 #'
 #' @return A data frame of source authorities and current pinned releases where
 #'   the upstream publishes numbered releases.

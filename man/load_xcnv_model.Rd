@@ -4,10 +4,11 @@
 \alias{load_xcnv_model}
 \title{Load an X-CNV model}
 \usage{
-load_xcnv_model(model)
+load_xcnv_model(model = NULL)
 }
 \arguments{
-\item{model}{A portable model object or path to an \code{xcnv-tree-v1} TSV file.}
+\item{model}{A portable model object or path to an \code{xcnv-tree-v1} TSV file.
+The bundled published model is used when omitted or \code{NULL}.}
 }
 \value{
 A model object suitable for \code{predict_cnv()}.

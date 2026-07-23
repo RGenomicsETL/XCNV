@@ -19,9 +19,9 @@
 
 #' Show the X-CNV resource contract
 #'
-#' Return the file names and resource groups expected by the package. The
-#' trained model and all large annotations are external resources; they are not
-#' downloaded or installed automatically.
+#' Return the file names and resource groups understood by the package. Large
+#' annotations are external resources; the model entry is an optional override
+#' for the bundled classifier.
 #'
 #' @return A data frame describing required resource keys, file names, and
 #'   groups.
@@ -80,7 +80,7 @@ validate_xcnv_resources <- function(path = NULL, require = c("annotations", "mod
       hit <- file.path(root, .xcnv_resource_spec$file[.xcnv_resource_spec$key == key])
       files[[key]] <- if (file.exists(hit)) hit else NA_character_
     }
-    if (key %in% needed && is.na(files[[key]])) {
+    if (key %in% needed && key != "model" && is.na(files[[key]])) {
       missing <- c(missing, .xcnv_resource_spec$file[.xcnv_resource_spec$key == key])
     }
   }

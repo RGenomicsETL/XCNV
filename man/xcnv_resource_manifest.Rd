@@ -11,7 +11,7 @@ A data frame describing required resource keys, file names, and
 groups.
 }
 \description{
-Return the file names and resource groups expected by the package. The
-trained model and all large annotations are external resources; they are not
-downloaded or installed automatically.
+Return the file names and resource groups understood by the package. Large
+annotations are external resources; the model entry is an optional override
+for the bundled classifier.
 }
