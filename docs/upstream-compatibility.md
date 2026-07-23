@@ -76,13 +76,12 @@ hard-coding the README's count.
 
 ## Independent ACMG/ClinGen 2019 lane
 
-The package's constitutional-CNV scoring lane is not a source translation of
-ClassifyCNV. It is authored from Riggs et al. (2020), DOI
-`10.1038/s41436-019-0686-8`. Its evidence relation requires source identifiers,
-source releases, and evidence record identifiers. Numeric criterion ranges and
-aggregate caps are machine readable through `cnv_2019_criteria()`. The scorer
-keeps raw and capped group totals separately and never lets an X-CNV model score
-select or admit evidence.
+The package's constitutional-CNV scoring lane is authored from Riggs et al.
+(2020), DOI `10.1038/s41436-019-0686-8`. Its evidence relation requires source
+identifiers, source releases, and evidence record identifiers. Numeric
+criterion ranges and aggregate caps are machine readable through
+`cnv_2019_criteria()`. The scorer keeps raw and capped group totals separately
+and never lets an X-CNV model score select or admit evidence.
 
 `derive_cnv_2019_evidence()` implements the current automatic subset: section 1
 functional content, section 2A complete containment of an established ClinGen
@@ -105,11 +104,3 @@ The independently authored R package files are GPL (>= 2). The pinned upstream
 X-CNV repository has no `LICENSE` file, so its source, model, training data, and
 annotation resources cannot be relicensed by this package. They are excluded
 from the built tarball and require permission before redistribution.
-
-Genotek ClassifyCNV commit
-`148757c4d6cbfb8d60878535686f40219b63a7a8` has a separate academic/research-only
-license and says its code must not be modified or redistributed without author
-permission. It is therefore an external executable/data differential reference
-only. No ClassifyCNV code or bundled resources are copied. A compatibility port
-under GPL requires an explicit written permission or relicensing grant from the
-ClassifyCNV copyright holders.

@@ -144,14 +144,3 @@ This package is a compatibility-oriented R interface, not a claim of a new
 scientific algorithm. The upstream authors and the Zhang et al. publication
 remain credited. See `NEWS.md` and the compatibility/design note for the
 supported subset and known parity gaps.
-
-## ClassifyCNV is an external reference
-
-Genotek ClassifyCNV commit
-`148757c4d6cbfb8d60878535686f40219b63a7a8` is useful for differential tests, but its
-license allows academic/research use only and prohibits modification and
-redistribution without permission. No ClassifyCNV code or bundled database is
-copied here. A distributed GPL-compatible port requires a separate written
-permission or relicensing grant from its copyright holders. The ACMG/ClinGen
-2019 lane above is independently authored from the published professional
-standard and uses separately staged source data.

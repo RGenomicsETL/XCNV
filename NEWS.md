@@ -15,6 +15,4 @@
   dosage relations; case, phenotype, inheritance, partial-gene, and population
   evidence remain curator/provider inputs.
 * Recorded the pinned upstream compatibility scope and the unresolved upstream,
-  resource, model, and tool licensing blockers. ClassifyCNV is an external
-  differential reference only because its license prohibits modification and
-  redistribution; no ClassifyCNV code or databases are copied.
+  resource, model, and tool licensing blockers.
