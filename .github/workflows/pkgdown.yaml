@@ -5,7 +5,10 @@ name: pkgdown
     branches: [main]
   workflow_dispatch:
 
-permissions: read-all
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: pkgdown-${{ github.ref }}
@@ -14,8 +17,9 @@ concurrency:
 jobs:
   pkgdown:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       _R_CHECK_FORCE_SUGGESTS_: false
@@ -32,9 +36,10 @@ jobs:
       - name: Build site
         run: pkgdown::build_site(new_process = FALSE)
         shell: Rscript {0}
-      - name: Deploy site
-        uses: JamesIves/github-pages-deploy-action@v4.6.9
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
         with:
-          clean: true
-          branch: gh-pages
-          folder: pkgdown
+          path: pkgdown
+      - name: Deploy site
+        id: deployment
+        uses: actions/deploy-pages@v4
