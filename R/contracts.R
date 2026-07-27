@@ -15,7 +15,7 @@
 }
 
 .xcnv_relation_assembly <- function(x, label) {
-  if (!"assembly" %in% names(x)) return(NA_character_)
+  if (!nrow(x) || !"assembly" %in% names(x)) return(NA_character_)
   values <- unique(vapply(as.character(x$assembly), .xcnv_canonical_assembly, character(1)))
   if (anyNA(values) || length(values) != 1L) {
     stop(label, " must declare one non-missing assembly", call. = FALSE)
@@ -29,9 +29,10 @@
     function(i) .xcnv_relation_assembly(objects[[i]], labels[[i]]),
     character(1)
   )
+  nonempty <- vapply(objects, nrow, integer(1)) > 0L
   declared <- !is.na(assemblies)
-  if (any(declared) && any(!declared)) {
-    stop("CNV, gene, and dosage relations must all declare assembly", call. = FALSE)
+  if (any(declared) && any(nonempty & !declared)) {
+    stop("nonempty CNV, gene, and dosage relations must all declare assembly", call. = FALSE)
   }
   if (sum(declared) > 1L && length(unique(assemblies[declared])) != 1L) {
     stop("CNV, gene, and dosage relations have conflicting assemblies", call. = FALSE)

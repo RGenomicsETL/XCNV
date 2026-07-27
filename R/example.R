@@ -25,6 +25,8 @@ xcnv_real_example <- function() {
     file.path(root, "case.dosage.tsv"), check.names = FALSE,
     stringsAsFactors = FALSE
   )
+  genes$chr <- as.character(genes$chr)
+  dosage$chr <- as.character(dosage$chr)
   cnv <- data.frame(
     chr = as.character(case$grch37_chrom),
     start = as.integer(case$grch37_start0),

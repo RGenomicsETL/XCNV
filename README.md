@@ -18,6 +18,8 @@ XCNV annotates copy-number variants and evaluates the published X-CNV
 classifier without bedtools or a runtime XGBoost dependency. It also
 provides a separate ACMG/ClinGen 2019 lane in which every selected
 criterion remains a row that can be inspected, changed, and rescored.
+Every model or policy result is a table with provider, assembly,
+release, identity, and explicit status metadata.
 
 The implementation is table-oriented. DuckDB evaluates the genomic
 overlap and reciprocal-overlap joins; ordinary R owns input validation,
@@ -80,7 +82,10 @@ prediction[, c(
 ```
 
 `MVP_score` is the X-CNV model output; XCNV does not relabel it as an
-ACMG criterion or clinical class.
+ACMG criterion or clinical class. This published compatibility lane is
+calibrated for GRCh37/hg19. A GRCh38 resource declaration is explicitly
+unsupported until a separately validated GRCh38 model exists; XCNV never
+silently lifts and relabels the result.
 
 ## Inspectable ACMG/ClinGen evidence
 
@@ -95,9 +100,10 @@ cnv <- transform(
   cnv_id = example$clinvar$cnv_id,
   cnv_type = type
 )
-evidence <- derive_cnv_2019_evidence(
-  cnv, example$genes, example$dosage
-)
+cnv$assembly <- "GRCh37"
+genes <- transform(example$genes, assembly = "GRCh37")
+dosage <- transform(example$dosage, assembly = "GRCh37")
+evidence <- derive_cnv_2019_evidence(cnv, genes, dosage)
 evidence[, c(
   "criterion", "score", "source_id",
   "source_release", "evidence_id"
@@ -118,13 +124,61 @@ The rows can be scored directly:
 score_cnv_2019(evidence)
 #>          cnv_id cnv_type score classification criterion_groups
 #> 1 clinvar-72461     loss     1     pathogenic                3
+#>              provider_id assembly resource_release model_id
+#> 1 xcnv-acmg-clingen-2019   GRCh37             <NA>     <NA>
+#>                              policy_id    status evidence_count
+#> 1 acmg-clingen-2019-constitutional-cnv supported              3
+#>   selected_evidence_count evidence_provider_count evidence_source_count
+#> 1                       3                       2                     2
+#>   evidence_release_count evidence_id evidence_provider_id evidence_source_id
+#> 1                      2        <NA>                 <NA>               <NA>
+#>   evidence_source_release
+#> 1                    <NA>
 ```
 
+Classification status is evaluated independently for each
+`(cnv_id, cnv_type)`. Only `supported` rows receive a clinical class;
+unspecified, unsupported, or conflicting assembly/status contracts
+return `NA` while retaining linked evidence counts and provider/source
+identities. A missing `policy_id` defaults to
+`acmg-clingen-2019-constitutional-cnv`; if supplied, it must be that
+exact, nonempty value on every evidence row. Foreign or mixed policies
+fail before a summary or classification is emitted. Evidence provider
+identity remains provenance and is neither voted nor rewritten. A scalar
+evidence `model_id` is based only on selected rows that contribute to
+the group or CNV/type score; it is emitted only when every such row has
+the same nonmissing model, so an unselected row cannot supply
+attribution. Conflicting nonmissing selected models for one CNV/type are
+rejected. Required evidence identifiers, provenance, and supplied
+contract labels must be non-missing, nonempty character/factor labels;
+logical, numeric, list, and matrix values are rejected rather than
+stringified. Releases are not collapsed into a misleading scalar when
+multiple releases contribute.
+
 Here criterion 2A supplies one point because the deletion completely
-contains an established haploinsufficient gene. The automatic provider
-does not invent phenotype, inheritance, segregation, population,
-case-report, or partial-gene evidence. Those require explicit additional
-evidence rows.
+contains an established haploinsufficient gene. The three relations
+declare one coherent assembly, and the output carries the ACMG/ClinGen
+policy identity separately from any X-CNV model output. They must also
+use nonnegative integer BED coordinates in the exactly representable
+range `[0, 2^53)` with `start < end` and nonempty character/factor
+contigs without surrounding whitespace; coordinate strings are checked
+before conversion. Native matching uses exact caller/provider contig
+names: XCNV does not infer aliases, and a valid CNV contig with no
+matching gene or dosage resource is a no-overlap result rather than an
+error. A zero-row CNV relation is neutral, but nonempty CNVs require
+nonempty provenance-labelled gene and dosage relations, so absent
+resources never fabricate negative evidence. The `functional_biotypes`
+vocabulary must be explicit, nonempty, unique character/factor labels;
+gene `biotype` values must be explicit and nonempty. Both reject
+surrounding whitespace or placeholder tokens before filtering.
+Legitimate explicit nonfunctional Ensembl-style biotypes remain valid;
+incomplete annotation cannot fabricate 1B/3A absence evidence. The
+automatic provider does not invent phenotype, inheritance, segregation,
+population, case-report, or partial-gene evidence. Those require
+explicit additional evidence rows. DECIPHER may be used as an optional
+permitted source when the user has the required access and case-level
+controls; XCNV neither downloads nor bundles DECIPHER data and never
+infers protected case evidence.
 
 ## Published model without XGBoost
 
@@ -166,7 +220,8 @@ write_xcnv(predictions, "predictions.output.csv")
 
 `xcnv_resource_manifest()` lists the required files. `run_xcnv()`
 provides the same workflow as one call and writes only when an output
-path is supplied.
+path is supplied. The current ownership and relational boundary is
+[`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 The compatibility contract, coordinate conventions, and current gaps are
 in

@@ -1,5 +1,34 @@
 # XCNV 0.0.0.9000
 
+* Tightened ACMG/ClinGen relation labels: contigs now require non-missing,
+  nonempty character/factor labels without surrounding whitespace. Gene biotypes
+  reject surrounding whitespace and case-insensitive placeholder tokens, and
+  `functional_biotypes` must be a nonempty unique explicit vocabulary. Legitimate
+  explicit nonfunctional Ensembl-style biotypes remain valid and produce the
+  contract's 1B/3A absence criteria when appropriate.
+
+* Hardened the native ACMG/ClinGen scorer contract: an omitted `policy_id`
+  defaults to the native policy, but a supplied value must be nonempty and
+  exactly `acmg-clingen-2019-constitutional-cnv` on every row. Foreign or
+  mixed policies now fail before a score or classification is emitted; evidence
+  provider identity remains provenance rather than a voting or rewritten field.
+
+* Hardened native ACMG/ClinGen input evidence and BED geometry: required
+  provenance/identifiers and supplied contract labels now require character or
+  factor labels, rejecting logical, numeric, list, and matrix values before
+  conversion; score labels are parsed without factor-code coercion. Model
+  attribution now uses only selected rows contributing to each group or summary
+  score, emits a scalar only for a complete common selected model, and never
+  broadcasts an unselected model. CNV, gene, and dosage coordinates must be
+  exactly representable integers in `[0, 2^53)` before overlap; strings
+  beyond that range fail before conversion. A zero-row CNV relation is neutral,
+  while nonempty CNVs require nonempty, provenance-labelled gene and dosage
+  resources and therefore cannot fabricate negative evidence. Missing, empty,
+  logical, or list-valued gene biotypes and functional-biotype vocabularies now
+  fail before filtering, so they cannot produce 1B/3A absence evidence. Contig names
+  remain exact caller/provider identifiers, and a valid contig with no matching
+  resource remains a no-overlap result rather than an error.
+
 * Corrected ACMG/ClinGen contract resolution to be per CNV. Evidence rows now
   retain their source provider identity (including gene/dosage providers), while
   summaries use only the policy-kernel provider. Group and summary provenance

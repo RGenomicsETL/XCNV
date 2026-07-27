@@ -13,19 +13,34 @@ derive_cnv_2019_evidence(
 )
 }
 \arguments{
-\item{cnvs}{Data frame with \code{cnv_id}, \code{chr}, \code{start}, \code{end}, and \code{cnv_type}
-(\code{"loss"} or \code{"gain"}).}
+\item{cnvs}{Data frame with character/factor, non-missing, nonempty \code{cnv_id}
+and \code{cnv_type} (\code{"loss"} or \code{"gain"}), and a non-missing, nonempty
+character/factor \code{chr} without surrounding whitespace. It also has exactly
+representable nonnegative integer \code{start} and \code{end} in \verb{[0, 2^53)}
+satisfying \code{start < end}. A zero-row relation is accepted as neutral.}
 
-\item{genes}{Gene relation with \code{chr}, \code{start}, \code{end}, \code{gene_id}, \code{biotype},
-\code{source_id}, and \code{source_release}.}
+\item{genes}{Gene relation with character/factor, non-missing, nonempty
+\code{gene_id}, source, and release values on every row, plus explicit nonempty
+\code{biotype} labels (surrounding whitespace and placeholder tokens are
+rejected); a nonempty relation has one \code{source_id} and \code{source_release}, a
+non-missing, nonempty character/factor \code{chr} without surrounding whitespace,
+and exactly representable nonnegative integer \code{start} and \code{end} in
+\verb{[0, 2^53)} satisfying \code{start < end}.}
 
-\item{dosage}{ClinGen dosage relation with \code{chr}, \code{start}, \code{end},
-\code{record_id}, \code{hi_score}, \code{ts_score}, \code{source_id}, and \code{source_release}.}
+\item{dosage}{ClinGen dosage relation with character/factor, non-missing,
+nonempty \code{record_id}, source, and release values on every row; a nonempty
+relation has one \code{source_id} and \code{source_release}, a non-missing, nonempty
+character/factor \code{chr} without surrounding whitespace, exactly representable
+nonnegative integer \code{start} and \code{end} in \verb{[0, 2^53)} satisfying \code{start < end},
+plus \code{hi_score} and \code{ts_score}.}
 
-\item{functional_biotypes}{Biotypes counted as functionally important for
-sections 1 and 3; defaults to \code{"protein_coding"}.}
+\item{functional_biotypes}{Nonempty, unique character/factor biotype labels
+counted as functionally important for sections 1 and 3; surrounding
+whitespace and placeholder tokens are rejected. Defaults to
+\code{"protein_coding"}.}
 
-\item{established_score}{ClinGen score treated as established; defaults to 3.}
+\item{established_score}{Finite numeric ClinGen score treated as established;
+defaults to 3. Character and factor labels are parsed by label.}
 }
 \value{
 A provenance-complete evidence data frame accepted by
@@ -36,9 +51,27 @@ Derive only the criteria determined mechanically by gene content and
 established ClinGen dosage records: section 1 content, section 2A complete
 dosage-feature containment, and section 3 protein-coding gene count. Case,
 phenotype, segregation, population, partial-gene, and inheritance evidence
-are intentionally not inferred. Inputs are BED half-open relations and must
-carry source identifiers and releases. An optional \code{assembly} column is
-accepted on all three relations; when present it must be complete and
-identical across them. GRCh37 and GRCh38 are recognized; other assemblies
-remain explicit as \code{unsupported} in the output contract.
+are intentionally not inferred. Each input is a BED half-open relation with
+non-missing, nonempty character/factor contig labels without leading or
+trailing whitespace, and finite, nonnegative integer coordinates in the
+exactly representable range \verb{[0, 2^53)} satisfying \code{start < end}.
+Character coordinates are range-checked before conversion, so values such as
+\code{9007199254740993} cannot be rounded into a different interval. Contig names
+are matched exactly: XCNV neither infers aliases nor rejects a valid
+no-overlap contig. CNV, gene, and dosage identifiers and source/release
+provenance must be non-missing, nonempty character/factor labels on every
+row; logical, numeric, list, and matrix values are rejected before label
+conversion. Each nonempty gene/dosage relation carries one source and release.
+Gene \code{biotype} must be explicit, nonempty character/factor labels, while
+\code{functional_biotypes} must additionally be unique before functional
+filtering; surrounding whitespace and case-insensitive placeholder tokens are
+rejected for both, while explicit nonfunctional Ensembl-style biotypes remain
+valid. Incomplete annotation cannot establish 1B or 3A absence evidence. An
+optional \code{assembly}
+column is accepted on all three relations; nonempty relations must declare one
+coherent value. GRCh37 and GRCh38 are recognized; other assemblies remain
+explicit as \code{unsupported} in the output contract. A zero-row CNV relation is
+neutral and returns typed empty evidence; nonempty CNVs require nonempty gene
+and dosage relations, so an empty resource is never interpreted as negative
+evidence.
 }

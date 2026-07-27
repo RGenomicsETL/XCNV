@@ -123,6 +123,62 @@ classify_cnv_score <- function(score) {
   )
 }
 
+.cnv_2019_parse_numeric <- function(x) {
+  if (!is.atomic(x) || is.matrix(x)) return(rep(NA_real_, length(x)))
+  if (is.numeric(x) && !is.factor(x)) return(as.numeric(x))
+  if (is.character(x) || is.factor(x)) {
+    return(suppressWarnings(as.numeric(trimws(as.character(x)))))
+  }
+  rep(NA_real_, length(x))
+}
+
+.cnv_2019_label_values <- function(
+  value, label, allow_missing = FALSE, reject_surrounding_whitespace = FALSE
+) {
+  if (is.matrix(value) || !(is.character(value) || is.factor(value))) {
+    stop(label, " must be character or factor labels", call. = FALSE)
+  }
+  value <- as.character(value)
+  invalid <- !allow_missing & is.na(value) |
+    !is.na(value) & !nzchar(trimws(value))
+  if (reject_surrounding_whitespace) {
+    invalid <- invalid | !is.na(value) & value != trimws(value)
+  }
+  if (any(invalid)) {
+    if (reject_surrounding_whitespace) {
+      stop(label, " must have non-missing, nonempty labels without surrounding whitespace", call. = FALSE)
+    }
+    stop(label, " must have non-missing, nonempty labels", call. = FALSE)
+  }
+  value
+}
+
+.cnv_2019_placeholder_biotypes <- c(
+  "unknown", ".", "na", "n-a", "n/a", "null", "unspecified", "not_provided"
+)
+
+.cnv_2019_validate_biotype_values <- function(value, label, require_unique = FALSE) {
+  value <- .cnv_2019_label_values(
+    value, label, reject_surrounding_whitespace = TRUE
+  )
+  if (any(tolower(value) %in% .cnv_2019_placeholder_biotypes)) {
+    stop(label, " must contain explicit biotype labels, not placeholders", call. = FALSE)
+  }
+  if (require_unique && anyDuplicated(value)) {
+    stop(label, " must contain unique biotype labels", call. = FALSE)
+  }
+  value
+}
+
+.cnv_2019_validate_label_columns <- function(x, columns, label, allow_missing = FALSE) {
+  for (column in columns) {
+    x[[column]] <- .cnv_2019_label_values(
+      x[[column]], paste(label, column), allow_missing = allow_missing
+    )
+  }
+  x
+}
+
 .normalize_cnv_evidence <- function(evidence) {
   required <- c(
     "cnv_id", "cnv_type", "criterion", "score", "source_id",
@@ -132,38 +188,74 @@ classify_cnv_score <- function(score) {
   missing <- setdiff(required, names(evidence))
   if (length(missing)) stop("evidence is missing columns: ", paste(missing, collapse = ", "), call. = FALSE)
   out <- as.data.frame(evidence, stringsAsFactors = FALSE)
-  for (column in setdiff(required, "score")) out[[column]] <- as.character(out[[column]])
-  out$score <- suppressWarnings(as.numeric(out$score))
+  out <- .cnv_2019_validate_label_columns(
+    out, setdiff(required, "score"), "evidence"
+  )
+  out$score <- .cnv_2019_parse_numeric(out$score)
   if (!"selected" %in% names(out)) out$selected <- TRUE
   if (!is.logical(out$selected) || anyNA(out$selected)) stop("evidence selected must be TRUE or FALSE", call. = FALSE)
 
-  if (!"assembly" %in% names(out)) out$assembly <- rep(NA_character_, nrow(out))
-  out$assembly <- vapply(as.character(out$assembly), .xcnv_canonical_assembly, character(1))
-  if (!"provider_id" %in% names(out)) {
-    out$provider_id <- as.character(out$source_id)
+  if (!"assembly" %in% names(out)) {
+    out$assembly <- rep(NA_character_, nrow(out))
+  } else {
+    out <- .cnv_2019_validate_label_columns(out, "assembly", "evidence", allow_missing = TRUE)
   }
-  if (!"model_id" %in% names(out)) out$model_id <- rep(NA_character_, nrow(out))
-  if (!"policy_id" %in% names(out)) out$policy_id <- rep(.xcnv_policy_id, nrow(out))
+  out$assembly <- vapply(out$assembly, .xcnv_canonical_assembly, character(1))
+  if (!"provider_id" %in% names(out)) {
+    out$provider_id <- out$source_id
+  } else {
+    out <- .cnv_2019_validate_label_columns(out, "provider_id", "evidence")
+  }
+  if (!"model_id" %in% names(out)) {
+    out$model_id <- rep(NA_character_, nrow(out))
+  } else {
+    out <- .cnv_2019_validate_label_columns(out, "model_id", "evidence", allow_missing = TRUE)
+  }
+  if (!"policy_id" %in% names(out)) {
+    out$policy_id <- rep(.xcnv_policy_id, nrow(out))
+  } else {
+    out <- .cnv_2019_validate_label_columns(out, "policy_id", "evidence")
+  }
   if (!"status" %in% names(out)) {
     out$status <- ifelse(
       is.na(out$assembly), "unspecified",
       ifelse(out$assembly %in% c("GRCh37", "GRCh38"), "supported", "unsupported")
     )
-  }
-  for (column in c("provider_id", "model_id", "policy_id", "status")) {
-    out[[column]] <- as.character(out[[column]])
+  } else {
+    out <- .cnv_2019_validate_label_columns(out, "status", "evidence")
   }
   allowed_status <- c("supported", "unspecified", "unsupported", "conflict")
-  if (any(!out$status %in% allowed_status)) {
+  if (anyNA(out$status) || any(!nzchar(trimws(out$status))) ||
+      any(!(out$status %in% allowed_status))) {
     stop("evidence status must be supported, unspecified, unsupported, or conflict", call. = FALSE)
   }
-  if (any(!nzchar(out$cnv_id)) || any(!out$cnv_type %in% c("loss", "gain")) ||
-      any(!nzchar(out$criterion)) || any(!is.finite(out$score)) ||
-      any(!nzchar(out$source_id)) || any(!nzchar(out$source_release)) ||
-      any(!nzchar(out$evidence_id)) || any(is.na(out$provider_id)) ||
-      any(!nzchar(out$provider_id)) || any(is.na(out$policy_id)) ||
-      any(!nzchar(out$policy_id))) {
-    stop("evidence identifiers, provenance, contract identity, CNV type, and score must be explicit", call. = FALSE)
+  if (anyNA(out$cnv_id) || any(!nzchar(trimws(out$cnv_id))) ||
+      anyNA(out$cnv_type) || any(!(out$cnv_type %in% c("loss", "gain"))) ||
+      anyNA(out$criterion) || any(!nzchar(trimws(out$criterion))) ||
+      any(!is.finite(out$score)) ||
+      anyNA(out$source_id) || any(!nzchar(trimws(out$source_id))) ||
+      anyNA(out$source_release) || any(!nzchar(trimws(out$source_release))) ||
+      anyNA(out$evidence_id) || any(!nzchar(trimws(out$evidence_id))) ||
+      anyNA(out$provider_id) || any(!nzchar(trimws(out$provider_id)))) {
+    stop("evidence identifiers, provenance, CNV type, and score must be explicit", call. = FALSE)
+  }
+  selected_models <- out[out$selected, , drop = FALSE]
+  model_contracts <- split(
+    selected_models$model_id,
+    paste(selected_models$cnv_id, selected_models$cnv_type, sep = "\r")
+  )
+  if (any(vapply(model_contracts, function(x) {
+    length(unique(x[!is.na(x)])) > 1L
+  }, logical(1)))) {
+    stop("selected evidence model_id must be one identity per CNV and type", call. = FALSE)
+  }
+  if (any(is.na(out$policy_id) | !nzchar(trimws(out$policy_id)) |
+          out$policy_id != .xcnv_policy_id)) {
+    stop(
+      "evidence policy_id must be the nonempty native policy identity: ",
+      .xcnv_policy_id,
+      call. = FALSE
+    )
   }
   keys <- paste(out$cnv_type, out$criterion, sep = ":")
   contract_keys <- paste(.cnv_2019_criteria$cnv_type, .cnv_2019_criteria$criterion, sep = ":")
@@ -199,6 +291,14 @@ classify_cnv_score <- function(score) {
   if (length(values) == 1L) values[[1L]] else NA_character_
 }
 
+.cnv_2019_selected_model_scalar <- function(evidence) {
+  if (!nrow(evidence) || anyNA(evidence$model_id) ||
+      any(!nzchar(trimws(evidence$model_id)))) {
+    return(NA_character_)
+  }
+  .cnv_2019_identity_scalar(evidence$model_id)
+}
+
 .cnv_2019_evidence_links <- function(evidence) {
   data.frame(
     provider_id = .cnv_2019_identity_scalar(evidence$provider_id),
@@ -231,12 +331,10 @@ classify_cnv_score <- function(score) {
     x <- evidence[i, , drop = FALSE]
     assemblies <- .cnv_2019_identity_values(x$assembly)
     statuses <- .cnv_2019_identity_values(x$status)
-    policies <- .cnv_2019_identity_values(x$policy_id)
     status <- if (length(statuses) == 1L) statuses[[1L]] else "conflict"
     if (length(assemblies) > 1L || (length(assemblies) && anyNA(x$assembly))) {
       status <- "conflict"
     }
-    if (length(policies) > 1L) status <- "conflict"
     if (!length(assemblies) && identical(status, "supported")) status <- "unspecified"
     if (length(assemblies) == 1L && !assemblies[[1L]] %in% c("GRCh37", "GRCh38") &&
         !identical(status, "conflict")) {
@@ -248,8 +346,8 @@ classify_cnv_score <- function(score) {
       cnv_type = as.character(x$cnv_type[[1L]]),
       assembly = if (length(assemblies)) assemblies[[1L]] else NA_character_,
       resource_release = links$source_release,
-      policy_id = .xcnv_policy_id,
-      model_id = NA_character_,
+      policy_id = .cnv_2019_identity_scalar(x$policy_id),
+      model_id = .cnv_2019_selected_model_scalar(x[x$selected, , drop = FALSE]),
       status = status,
       evidence_count = links$evidence_count,
       selected_evidence_count = sum(x$selected),
@@ -305,7 +403,8 @@ classify_cnv_score <- function(score) {
       evidence_source_count = links$evidence_source_count,
       evidence_release_count = links$evidence_release_count,
       assembly = contract$assembly[[1L]], resource_release = links$source_release,
-      model_id = NA_character_, policy_id = contract$policy_id[[1L]],
+      model_id = .cnv_2019_selected_model_scalar(selected[i, , drop = FALSE]),
+      policy_id = contract$policy_id[[1L]],
       status = contract$status[[1L]], stringsAsFactors = FALSE
     )
   })
@@ -324,12 +423,27 @@ classify_cnv_score <- function(score) {
 #' are resolved independently for each `(cnv_id, cnv_type)`. Evidence and
 #' group rows retain contributing source identities and linked evidence counts;
 #' the summary provider is the XCNV ACMG/ClinGen policy kernel. Only `supported`
-#' status emits a clinical classification.
+#' status emits a clinical classification. Identifier, provenance, and contract
+#' labels must be character or factor labels (never logical, numeric, list, or
+#' matrix values) and required values must be non-missing and nonempty on every
+#' row. If supplied, `policy_id` must be nonempty and equal the native
+#' ACMG/ClinGen policy identity on every row; foreign or mixed policies are
+#' rejected rather than reinterpreted. A scalar evidence `model_id` comes only
+#' from selected evidence that contributes to the output grain: its group, or
+#' the CNV/type summary score. It is emitted only when every such row has the
+#' same nonmissing model; unselected rows never supply it. Distinct nonmissing
+#' selected model identities for one CNV/type are rejected. Provider identity
+#' remains evidence provenance and is neither a voting input nor rewritten.
 #'
-#' @param evidence Data frame with `cnv_id`, `cnv_type`, `criterion`, `score`,
-#'   `source_id`, `source_release`, and `evidence_id`; optional logical
+#' @param evidence Data frame with character/factor, non-missing, nonempty
+#'   `cnv_id`, `cnv_type`, `criterion`, `source_id`, `source_release`, and
+#'   `evidence_id`, plus a finite numeric `score`. Numeric character and factor
+#'   score labels are parsed by label, never by factor code. Optional logical
 #'   `selected` defaults to `TRUE`. Optional contract columns include
-#'   `provider_id`, `assembly`, `policy_id`, and `status`.
+#'   `provider_id`, `assembly`, `model_id`, `policy_id`, and `status`; supplied
+#'   label columns must be character/factor (with missing `assembly` and
+#'   `model_id` allowed), `provider_id` must be nonempty on every row, and
+#'   `policy_id` must be `"acmg-clingen-2019-constitutional-cnv"` on every row.
 #' @param detail `"summary"` for one row per CNV or `"groups"` for the capped
 #'   criterion-group audit relation.
 #' @return A data frame. Summary rows include policy status and linked evidence
@@ -370,7 +484,7 @@ score_cnv_2019 <- function(evidence, detail = c("summary", "groups")) {
       score = score, classification = classification,
       criterion_groups = nrow(group_rows), provider_id = .xcnv_acmg_provider_id,
       assembly = contract$assembly, resource_release = contract$resource_release,
-      model_id = NA_character_, policy_id = .xcnv_policy_id,
+      model_id = contract$model_id, policy_id = contract$policy_id,
       status = contract$status, evidence_count = contract$evidence_count,
       selected_evidence_count = contract$selected_evidence_count,
       evidence_provider_count = contract$evidence_provider_count,
@@ -390,10 +504,76 @@ score_cnv_2019 <- function(evidence, detail = c("summary", "groups")) {
 
 .one_provenance_value <- function(x, column, label) {
   if (!column %in% names(x)) stop(label, " is missing provenance column ", column, call. = FALSE)
-  value <- unique(as.character(x[[column]]))
-  value <- value[!is.na(value) & nzchar(value)]
+  value <- .cnv_2019_label_values(x[[column]], paste(label, column))
+  if (!length(value)) stop(label, " must contain one explicit ", column, call. = FALSE)
+  value <- unique(value)
   if (length(value) != 1L) stop(label, " must contain one explicit ", column, call. = FALSE)
   value
+}
+
+.cnv_2019_max_bed_coordinate <- "9007199254740991"
+
+.cnv_2019_parse_bed_coordinates <- function(x, label) {
+  message <- paste0(
+    label,
+    " must have finite, nonnegative exactly representable integer BED coordinates in [0, 2^53) with start < end"
+  )
+  if (!is.atomic(x) || is.matrix(x)) stop(message, call. = FALSE)
+  if (is.numeric(x) && !is.factor(x)) {
+    out <- as.numeric(x)
+    invalid <- !is.finite(out) | out < 0 | out != floor(out) |
+      out > as.numeric(.cnv_2019_max_bed_coordinate)
+  } else if (is.character(x) || is.factor(x)) {
+    text <- trimws(as.character(x))
+    digits <- rep(FALSE, length(text))
+    present <- which(!is.na(text))
+    digits[present] <- grepl("^[0-9]+$", text[present])
+    canonical <- text
+    canonical[digits] <- sub("^0+", "", canonical[digits])
+    zero <- !is.na(canonical) & canonical == ""
+    canonical[zero] <- "0"
+    valid <- rep(FALSE, length(text))
+    candidate <- which(digits)
+    if (length(candidate)) {
+      width <- nchar(canonical[candidate])
+      limit <- .cnv_2019_max_bed_coordinate
+      valid[candidate] <- width < nchar(limit) |
+        (width == nchar(limit) & canonical[candidate] <= limit)
+    }
+    invalid <- !valid
+    out <- rep(NA_real_, length(x))
+    out[valid] <- as.numeric(canonical[valid])
+  } else {
+    stop(message, call. = FALSE)
+  }
+  if (any(invalid)) stop(message, call. = FALSE)
+  out
+}
+
+.validate_cnv_2019_bed_relation <- function(x, label) {
+  x$chr <- .cnv_2019_label_values(
+    x$chr, paste(label, "chr"), reject_surrounding_whitespace = TRUE
+  )
+  x$start <- .cnv_2019_parse_bed_coordinates(x$start, label)
+  x$end <- .cnv_2019_parse_bed_coordinates(x$end, label)
+  if (any(x$start >= x$end)) {
+    stop(
+      label,
+      " must have finite, nonnegative exactly representable integer BED coordinates in [0, 2^53) with start < end",
+      call. = FALSE
+    )
+  }
+  x
+}
+
+.empty_cnv_2019_evidence <- function() {
+  data.frame(
+    cnv_id = character(), cnv_type = character(), criterion = character(),
+    score = numeric(), source_id = character(), source_release = character(),
+    evidence_id = character(), selected = logical(), provider_id = character(),
+    assembly = character(), model_id = character(), policy_id = character(),
+    status = character(), stringsAsFactors = FALSE
+  )
 }
 
 #' Derive objective ACMG/ClinGen 2019 CNV content evidence
@@ -402,21 +582,54 @@ score_cnv_2019 <- function(evidence, detail = c("summary", "groups")) {
 #' established ClinGen dosage records: section 1 content, section 2A complete
 #' dosage-feature containment, and section 3 protein-coding gene count. Case,
 #' phenotype, segregation, population, partial-gene, and inheritance evidence
-#' are intentionally not inferred. Inputs are BED half-open relations and must
-#' carry source identifiers and releases. An optional `assembly` column is
-#' accepted on all three relations; when present it must be complete and
-#' identical across them. GRCh37 and GRCh38 are recognized; other assemblies
-#' remain explicit as `unsupported` in the output contract.
+#' are intentionally not inferred. Each input is a BED half-open relation with
+#' non-missing, nonempty character/factor contig labels without leading or
+#' trailing whitespace, and finite, nonnegative integer coordinates in the
+#' exactly representable range `[0, 2^53)` satisfying `start < end`.
+#' Character coordinates are range-checked before conversion, so values such as
+#' `9007199254740993` cannot be rounded into a different interval. Contig names
+#' are matched exactly: XCNV neither infers aliases nor rejects a valid
+#' no-overlap contig. CNV, gene, and dosage identifiers and source/release
+#' provenance must be non-missing, nonempty character/factor labels on every
+#' row; logical, numeric, list, and matrix values are rejected before label
+#' conversion. Each nonempty gene/dosage relation carries one source and release.
+#' Gene `biotype` must be explicit, nonempty character/factor labels, while
+#' `functional_biotypes` must additionally be unique before functional
+#' filtering; surrounding whitespace and case-insensitive placeholder tokens are
+#' rejected for both, while explicit nonfunctional Ensembl-style biotypes remain
+#' valid. Incomplete annotation cannot establish 1B or 3A absence evidence. An
+#' optional `assembly`
+#' column is accepted on all three relations; nonempty relations must declare one
+#' coherent value. GRCh37 and GRCh38 are recognized; other assemblies remain
+#' explicit as `unsupported` in the output contract. A zero-row CNV relation is
+#' neutral and returns typed empty evidence; nonempty CNVs require nonempty gene
+#' and dosage relations, so an empty resource is never interpreted as negative
+#' evidence.
 #'
-#' @param cnvs Data frame with `cnv_id`, `chr`, `start`, `end`, and `cnv_type`
-#'   (`"loss"` or `"gain"`).
-#' @param genes Gene relation with `chr`, `start`, `end`, `gene_id`, `biotype`,
-#'   `source_id`, and `source_release`.
-#' @param dosage ClinGen dosage relation with `chr`, `start`, `end`,
-#'   `record_id`, `hi_score`, `ts_score`, `source_id`, and `source_release`.
-#' @param functional_biotypes Biotypes counted as functionally important for
-#'   sections 1 and 3; defaults to `"protein_coding"`.
-#' @param established_score ClinGen score treated as established; defaults to 3.
+#' @param cnvs Data frame with character/factor, non-missing, nonempty `cnv_id`
+#'   and `cnv_type` (`"loss"` or `"gain"`), and a non-missing, nonempty
+#'   character/factor `chr` without surrounding whitespace. It also has exactly
+#'   representable nonnegative integer `start` and `end` in `[0, 2^53)`
+#'   satisfying `start < end`. A zero-row relation is accepted as neutral.
+#' @param genes Gene relation with character/factor, non-missing, nonempty
+#'   `gene_id`, source, and release values on every row, plus explicit nonempty
+#'   `biotype` labels (surrounding whitespace and placeholder tokens are
+#'   rejected); a nonempty relation has one `source_id` and `source_release`, a
+#'   non-missing, nonempty character/factor `chr` without surrounding whitespace,
+#'   and exactly representable nonnegative integer `start` and `end` in
+#'   `[0, 2^53)` satisfying `start < end`.
+#' @param dosage ClinGen dosage relation with character/factor, non-missing,
+#'   nonempty `record_id`, source, and release values on every row; a nonempty
+#'   relation has one `source_id` and `source_release`, a non-missing, nonempty
+#'   character/factor `chr` without surrounding whitespace, exactly representable
+#'   nonnegative integer `start` and `end` in `[0, 2^53)` satisfying `start < end`,
+#'   plus `hi_score` and `ts_score`.
+#' @param functional_biotypes Nonempty, unique character/factor biotype labels
+#'   counted as functionally important for sections 1 and 3; surrounding
+#'   whitespace and placeholder tokens are rejected. Defaults to
+#'   `"protein_coding"`.
+#' @param established_score Finite numeric ClinGen score treated as established;
+#'   defaults to 3. Character and factor labels are parsed by label.
 #' @return A provenance-complete evidence data frame accepted by
 #'   `score_cnv_2019()`.
 #' @export
@@ -436,19 +649,59 @@ derive_cnv_2019_evidence <- function(
     missing <- setdiff(requirements[[label]], names(objects[[label]]))
     if (length(missing)) stop(label, " is missing columns: ", paste(missing, collapse = ", "), call. = FALSE)
   }
+  functional_biotypes <- .cnv_2019_validate_biotype_values(
+    functional_biotypes, "functional_biotypes", require_unique = TRUE
+  )
+  if (!length(functional_biotypes)) {
+    stop("functional_biotypes must contain at least one label", call. = FALSE)
+  }
+  established_score <- .cnv_2019_parse_numeric(established_score)
+  if (length(established_score) != 1L || is.na(established_score) ||
+      !is.finite(established_score)) {
+    stop("established_score must be one finite numeric value", call. = FALSE)
+  }
   cnvs <- as.data.frame(cnvs, stringsAsFactors = FALSE)
   genes <- as.data.frame(genes, stringsAsFactors = FALSE)
   dosage <- as.data.frame(dosage, stringsAsFactors = FALSE)
+  cnvs <- .validate_cnv_2019_bed_relation(cnvs, "cnvs")
+  genes <- .validate_cnv_2019_bed_relation(genes, "genes")
+  dosage <- .validate_cnv_2019_bed_relation(dosage, "dosage")
+  cnvs <- .cnv_2019_validate_label_columns(cnvs, c("cnv_id", "cnv_type"), "cnvs")
+  genes <- .cnv_2019_validate_label_columns(
+    genes, c("gene_id", "source_id", "source_release"), "genes"
+  )
+  genes$biotype <- .cnv_2019_validate_biotype_values(
+    genes$biotype, "genes biotype"
+  )
+  dosage <- .cnv_2019_validate_label_columns(
+    dosage, c("record_id", "source_id", "source_release"), "dosage"
+  )
+  if ("assembly" %in% names(cnvs)) {
+    cnvs <- .cnv_2019_validate_label_columns(cnvs, "assembly", "cnvs", allow_missing = TRUE)
+  }
+  if ("assembly" %in% names(genes)) {
+    genes <- .cnv_2019_validate_label_columns(genes, "assembly", "genes", allow_missing = TRUE)
+  }
+  if ("assembly" %in% names(dosage)) {
+    dosage <- .cnv_2019_validate_label_columns(dosage, "assembly", "dosage", allow_missing = TRUE)
+  }
+  dosage$hi_score <- .cnv_2019_parse_numeric(dosage$hi_score)
+  dosage$ts_score <- .cnv_2019_parse_numeric(dosage$ts_score)
   relation_contract <- .xcnv_validate_relation_assemblies(
     list(cnvs, genes, dosage), c("cnvs", "genes", "dosage")
   )
-  if (anyDuplicated(cnvs$cnv_id) || any(!cnvs$cnv_type %in% c("loss", "gain"))) {
+  if (anyDuplicated(cnvs$cnv_id) || anyNA(cnvs$cnv_type) ||
+      any(!(cnvs$cnv_type %in% c("loss", "gain")))) {
     stop("cnv_id must be unique and cnv_type must be loss or gain", call. = FALSE)
   }
-  gene_source <- .one_provenance_value(genes, "source_id", "genes")
-  gene_release <- .one_provenance_value(genes, "source_release", "genes")
-  dosage_source <- .one_provenance_value(dosage, "source_id", "dosage")
-  dosage_release <- .one_provenance_value(dosage, "source_release", "dosage")
+  gene_source <- if (nrow(genes)) .one_provenance_value(genes, "source_id", "genes") else NA_character_
+  gene_release <- if (nrow(genes)) .one_provenance_value(genes, "source_release", "genes") else NA_character_
+  dosage_source <- if (nrow(dosage)) .one_provenance_value(dosage, "source_id", "dosage") else NA_character_
+  dosage_release <- if (nrow(dosage)) .one_provenance_value(dosage, "source_release", "dosage") else NA_character_
+  if (!nrow(cnvs)) return(.empty_cnv_2019_evidence())
+  if (!nrow(genes) || !nrow(dosage)) {
+    stop("nonempty CNVs require nonempty gene and dosage relations with explicit provenance", call. = FALSE)
+  }
   functional <- genes[genes$biotype %in% functional_biotypes, , drop = FALSE]
   context <- .new_overlap_context("duckdb")
   on.exit(.close_overlap_context(context), add = TRUE)
@@ -487,25 +740,17 @@ derive_cnv_2019_evidence <- function(
     dosage_index <- unique(dosage_pairs$b_id[dosage_pairs$a_id == i & !is.na(dosage_pairs$b_id)])
     if (length(dosage_index)) {
       score_column <- if (identical(cnv$cnv_type[[1L]], "loss")) "hi_score" else "ts_score"
-      established <- suppressWarnings(as.numeric(dosage[[score_column]][dosage_index])) == established_score
+      established <- dosage[[score_column]][dosage_index] == established_score
       fully_contained <-
-        as.numeric(cnv$start[[1L]]) <= as.numeric(dosage$start[dosage_index]) &
-        as.numeric(cnv$end[[1L]]) >= as.numeric(dosage$end[dosage_index])
-      records <- dosage_index[established & fully_contained]
+        cnv$start[[1L]] <= dosage$start[dosage_index] &
+        cnv$end[[1L]] >= dosage$end[dosage_index]
+      records <- dosage_index[which(!is.na(established) & established & fully_contained)]
       if (length(records)) {
         ids <- sort(unique(as.character(dosage$record_id[records])))
         add(cnv, "2A", 1, dosage_source, dosage_release, paste0("dosage:", paste(ids, collapse = ",")))
       }
     }
   }
-  if (!length(rows)) {
-    return(data.frame(
-      cnv_id = character(), cnv_type = character(), criterion = character(),
-      score = numeric(), source_id = character(), source_release = character(),
-      evidence_id = character(), selected = logical(), provider_id = character(),
-      assembly = character(), model_id = character(), policy_id = character(),
-      status = character()
-    ))
-  }
+  if (!length(rows)) return(.empty_cnv_2019_evidence())
   do.call(rbind, rows)
 }

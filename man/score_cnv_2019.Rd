@@ -7,10 +7,15 @@
 score_cnv_2019(evidence, detail = c("summary", "groups"))
 }
 \arguments{
-\item{evidence}{Data frame with \code{cnv_id}, \code{cnv_type}, \code{criterion}, \code{score},
-\code{source_id}, \code{source_release}, and \code{evidence_id}; optional logical
+\item{evidence}{Data frame with character/factor, non-missing, nonempty
+\code{cnv_id}, \code{cnv_type}, \code{criterion}, \code{source_id}, \code{source_release}, and
+\code{evidence_id}, plus a finite numeric \code{score}. Numeric character and factor
+score labels are parsed by label, never by factor code. Optional logical
 \code{selected} defaults to \code{TRUE}. Optional contract columns include
-\code{provider_id}, \code{assembly}, \code{policy_id}, and \code{status}.}
+\code{provider_id}, \code{assembly}, \code{model_id}, \code{policy_id}, and \code{status}; supplied
+label columns must be character/factor (with missing \code{assembly} and
+\code{model_id} allowed), \code{provider_id} must be nonempty on every row, and
+\code{policy_id} must be \code{"acmg-clingen-2019-constitutional-cnv"} on every row.}
 
 \item{detail}{\code{"summary"} for one row per CNV or \code{"groups"} for the capped
 criterion-group audit relation.}
@@ -28,5 +33,15 @@ inferred from free text or phenotype similarity by this function. Contracts
 are resolved independently for each \verb{(cnv_id, cnv_type)}. Evidence and
 group rows retain contributing source identities and linked evidence counts;
 the summary provider is the XCNV ACMG/ClinGen policy kernel. Only \code{supported}
-status emits a clinical classification.
+status emits a clinical classification. Identifier, provenance, and contract
+labels must be character or factor labels (never logical, numeric, list, or
+matrix values) and required values must be non-missing and nonempty on every
+row. If supplied, \code{policy_id} must be nonempty and equal the native
+ACMG/ClinGen policy identity on every row; foreign or mixed policies are
+rejected rather than reinterpreted. A scalar evidence \code{model_id} comes only
+from selected evidence that contributes to the output grain: its group, or
+the CNV/type summary score. It is emitted only when every such row has the
+same nonmissing model; unselected rows never supply it. Distinct nonmissing
+selected model identities for one CNV/type are rejected. Provider identity
+remains evidence provenance and is neither a voting input nor rewritten.
 }

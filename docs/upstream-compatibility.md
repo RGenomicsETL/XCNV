@@ -80,19 +80,47 @@ criterion ranges and aggregate caps are machine readable through
 `cnv_2019_criteria()`. The scorer keeps raw and capped group totals separately
 and never lets an X-CNV model score select or admit evidence. Evidence and
 group rows retain contributing provider/source identities and linked evidence
-counts. `derive_cnv_2019_evidence()` uses the gene or dosage `source_id` as
-that row's evidence `provider_id`. Classification contracts are resolved per
-`(cnv_id, cnv_type)`; the summary provider is the XCNV ACMG/ClinGen policy
-kernel. A clinical class is
-emitted only for `supported` status. Assembly-unspecified, unsupported, or
-conflicting contracts retain scores and provenance but return `NA`
+counts; provider identity is provenance, not a voting or rewritten field.
+`derive_cnv_2019_evidence()` uses the gene or dosage `source_id` as that row's
+evidence `provider_id`. Every required evidence identifier, provenance, and
+supplied contract value is a non-missing, nonempty character/factor label;
+logical, numeric, list, and matrix values fail before conversion. Score labels
+are parsed through their character labels, never factor codes. A scalar evidence
+`model_id` is taken only from selected rows that contribute to its group or
+CNV/type score, and is emitted only when every such row has the same nonmissing
+model; unselected rows cannot supply it. Conflicting nonmissing selected model
+identities for one CNV/type are rejected. An omitted evidence
+`policy_id` defaults to `acmg-clingen-2019-constitutional-cnv`; when supplied,
+it must be that exact, nonempty identity on every row. Foreign or mixed policies
+are rejected before scoring rather than rewritten in a native-policy summary. Classification
+contracts are resolved per `(cnv_id, cnv_type)`; the summary provider is the
+XCNV ACMG/ClinGen policy kernel. A clinical class is emitted only for
+`supported` status. Assembly-unspecified, unsupported, or conflicting
+assembly/status contracts retain scores and provenance but return `NA`
 classification, and multiple releases are not concatenated into one misleading
 scalar.
 
 `derive_cnv_2019_evidence()` implements the current automatic subset: section 1
 functional content, section 2A complete containment of an established ClinGen
-HI/TS feature, and section 3 protein-coding gene count. This provider is backed
-by the same DuckDB interval join as X-CNV annotation. Partial-gene mechanisms,
+HI/TS feature, and section 3 protein-coding gene count. Its CNV, gene, and
+dosage inputs must have nonempty contigs and exactly representable nonnegative
+integer half-open BED coordinates in `[0, 2^53)` with `start < end`; character
+coordinates are range-checked before conversion, so values at or beyond `2^53`
+fail before the DuckDB interval join. A zero-row CNV relation is neutral after
+nonempty resources agree, while nonempty CNVs require nonempty gene and dosage
+relations with explicit provenance; an empty resource is never treated as
+negative evidence. Contig identifiers are non-missing, nonempty
+character/factor labels without surrounding whitespace. Gene `biotype` values
+are explicit, nonempty character/factor labels, and `functional_biotypes` is an
+explicit, nonempty, unique character/factor vocabulary. Both reject surrounding
+whitespace or placeholder tokens before functional filtering. Gene biotype
+values need not be unique across rows. Legitimate explicit nonfunctional
+Ensembl-style biotypes remain valid, while incomplete annotation cannot
+establish 1B/3A absence evidence. Contig identifiers are exact caller/provider
+contracts: XCNV
+does not infer aliases, and a valid contig with no matching resource row is a
+no-overlap result. This provider is backed by the same DuckDB
+interval join as X-CNV annotation. Partial-gene mechanisms,
 PVS1/NMD, phenotype specificity, published cases, segregation, inheritance,
 and population evidence are deliberately outside this automatic subset until a
 separately tested provider supplies them.

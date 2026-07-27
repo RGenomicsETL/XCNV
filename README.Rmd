@@ -112,14 +112,39 @@ score_cnv_2019(evidence)
 
 Classification status is evaluated independently for each `(cnv_id, cnv_type)`.
 Only `supported` rows receive a clinical class; unspecified, unsupported, or
-conflicting assembly/policy contracts return `NA` while retaining linked
-evidence counts and provider/source identities. Releases are not collapsed into
-a misleading scalar when multiple releases contribute.
+conflicting assembly/status contracts return `NA` while retaining linked
+evidence counts and provider/source identities. A missing `policy_id` defaults
+to `acmg-clingen-2019-constitutional-cnv`; if supplied, it must be that exact,
+nonempty value on every evidence row. Foreign or mixed policies fail before a
+summary or classification is emitted. Evidence provider identity remains
+provenance and is neither voted nor rewritten. A scalar evidence `model_id` is
+based only on selected rows that contribute to the group or CNV/type score; it
+is emitted only when every such row has the same nonmissing model, so an
+unselected row cannot supply attribution. Conflicting nonmissing selected models
+for one CNV/type are rejected. Required evidence identifiers, provenance, and
+supplied contract labels must be non-missing, nonempty character/factor labels;
+logical, numeric, list, and matrix values are rejected rather than stringified.
+Releases are not collapsed into a misleading scalar when multiple releases
+contribute.
 
 Here criterion 2A supplies one point because the deletion completely contains
 an established haploinsufficient gene. The three relations declare one coherent
 assembly, and the output carries the ACMG/ClinGen policy identity separately
-from any X-CNV model output. The automatic provider does not invent phenotype,
+from any X-CNV model output. They must also use nonnegative integer BED
+coordinates in the exactly representable range `[0, 2^53)` with `start < end`
+and nonempty character/factor contigs without surrounding whitespace; coordinate
+strings are checked before conversion. Native matching uses exact
+caller/provider contig names: XCNV does not infer aliases, and a valid CNV
+contig with no matching gene or dosage resource is a no-overlap result rather
+than an error. A zero-row CNV relation is neutral, but nonempty CNVs require
+nonempty provenance-labelled gene and dosage relations, so absent resources
+never fabricate negative evidence. The `functional_biotypes` vocabulary must be explicit, nonempty,
+unique character/factor labels; gene `biotype` values must be explicit and
+nonempty. Both reject surrounding whitespace or placeholder tokens before
+filtering.
+Legitimate explicit nonfunctional Ensembl-style biotypes remain valid;
+incomplete annotation cannot fabricate 1B/3A absence evidence.
+The automatic provider does not invent phenotype,
 inheritance, segregation, population, case-report, or partial-gene evidence.
 Those require explicit additional evidence rows. DECIPHER may be used as an
 optional permitted source when the user has the required access and case-level
