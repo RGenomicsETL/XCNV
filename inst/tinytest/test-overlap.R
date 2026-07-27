@@ -9,7 +9,15 @@ b <- data.frame(
   end = c(25L, 55L, 8L)
 )
 
-context <- XCNV:::.new_overlap_context("duckdb")
+connection_messages <- character()
+context <- withCallingHandlers(
+  XCNV:::.new_overlap_context("duckdb"),
+  message = function(cnd) {
+    connection_messages <<- c(connection_messages, conditionMessage(cnd))
+    invokeRestart("muffleMessage")
+  }
+)
+expect_equal(connection_messages, character())
 observed <- XCNV:::.bed_overlap_pairs(a, b, context = context)
 expected <- XCNV:::.bed_overlap_pairs_reference(a, b)
 expect_equal(observed, expected)

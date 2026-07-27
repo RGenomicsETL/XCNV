@@ -63,9 +63,12 @@
       # explicitly without changing the caller's global configuration.
       config$extension_directory <- file.path(tempdir(), "duckdb", "extensions")
     }
-    context$con <- DBI::dbConnect(
-      duckdb::duckdb(config = config), dbdir = ":memory:"
-    )
+    driver <- if ("shared_home" %in% names(formals(duckdb::duckdb))) {
+      duckdb::duckdb(config = config, shared_home = FALSE)
+    } else {
+      duckdb::duckdb(config = config)
+    }
+    context$con <- DBI::dbConnect(driver, dbdir = ":memory:")
   }
   context
 }

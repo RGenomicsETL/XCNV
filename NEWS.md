@@ -1,5 +1,9 @@
 # XCNV 0.0.0.9000
 
+* Selected DuckDB's explicit non-shared home mode when supported, keeping
+  internal overlap connections silent and README rendering deterministic across
+  DuckDB releases.
+
 * Tightened ACMG/ClinGen relation labels: contigs now require non-missing,
   nonempty character/factor labels without surrounding whitespace. Gene biotypes
   reject surrounding whitespace and case-insensitive placeholder tokens, and
