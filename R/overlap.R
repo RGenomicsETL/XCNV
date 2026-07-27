@@ -422,6 +422,12 @@ annotate_cnv <- function(x, resources, overlap_backend = c("duckdb", "reference"
   } else {
     xcnv_resources(resources, require = "annotations")
   }
+  if (!identical(resources$status, "supported")) {
+    stop(
+      "X-CNV compatibility resources have unsupported assembly/status: ",
+      resources$status, call. = FALSE
+    )
+  }
   prepared <- .prepare_cnv(x)
   a <- prepared$data
   annotation <- .load_annotation_resources(resources)

@@ -11,6 +11,16 @@ expect_error(validate_cnv(data.frame(chr = "1", start = 1, end = 2, type = "dup"
 
 fixture <- xcnv_fixture_resources()
 expect_true(inherits(fixture, "xcnv_resources"))
+expect_equal(fixture$assembly, "GRCh37")
+expect_equal(fixture$status, "supported")
+unsupported_assembly <- xcnv_resources(
+  fixture$root, require = "all", assembly = "GRCh38"
+)
+expect_equal(unsupported_assembly$status, "unsupported")
+expect_error(annotate_cnv(
+  data.frame(chr = "1", start = 100L, end = 199L, type = "gain"),
+  unsupported_assembly
+))
 real_resources <- xcnv_resources(xcnv_real_example()$resources$root)
 expect_true(is.na(real_resources$files$model))
 expect_error(xcnv_resources(real_resources$root, require = "model"))

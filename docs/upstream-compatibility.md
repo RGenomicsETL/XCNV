@@ -78,7 +78,16 @@ The package's constitutional-CNV scoring lane is authored from Riggs et al.
 identifiers, source releases, and evidence record identifiers. Numeric
 criterion ranges and aggregate caps are machine readable through
 `cnv_2019_criteria()`. The scorer keeps raw and capped group totals separately
-and never lets an X-CNV model score select or admit evidence.
+and never lets an X-CNV model score select or admit evidence. Evidence and
+group rows retain contributing provider/source identities and linked evidence
+counts. `derive_cnv_2019_evidence()` uses the gene or dosage `source_id` as
+that row's evidence `provider_id`. Classification contracts are resolved per
+`(cnv_id, cnv_type)`; the summary provider is the XCNV ACMG/ClinGen policy
+kernel. A clinical class is
+emitted only for `supported` status. Assembly-unspecified, unsupported, or
+conflicting contracts retain scores and provenance but return `NA`
+classification, and multiple releases are not concatenated into one misleading
+scalar.
 
 `derive_cnv_2019_evidence()` implements the current automatic subset: section 1
 functional content, section 2A complete containment of an established ClinGen

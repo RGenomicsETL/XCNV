@@ -4,7 +4,11 @@
 \alias{validate_xcnv_resources}
 \title{Validate an X-CNV resource bundle}
 \usage{
-validate_xcnv_resources(path = NULL, require = "annotations")
+validate_xcnv_resources(
+  path = NULL,
+  require = "annotations",
+  assembly = "GRCh37"
+)
 }
 \arguments{
 \item{path}{Resource directory. If omitted, \code{XCNV_RESOURCE_DIR} must be set.}
@@ -12,6 +16,9 @@ validate_xcnv_resources(path = NULL, require = "annotations")
 \item{require}{Resource groups to require: \code{"annotations"} (the default),
 \code{"model"}, or \code{"all"}. A model file is required only when \code{"model"} or
 \code{"all"} is requested; otherwise prediction uses the bundled model.}
+
+\item{assembly}{Assembly declared for the resource bundle. The X-CNV
+compatibility lane currently supports only \code{"GRCh37"}.}
 }
 \value{
 An object of class \code{xcnv_resources}, containing the normalized root

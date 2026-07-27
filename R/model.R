@@ -214,8 +214,9 @@ xcnv_bundled_model <- function() {
 #' @param model A model object/path. If `NULL`, a model in `resources` is used
 #'   when present, otherwise the bundled published model is used.
 #' @param overlap_backend Passed to `annotate_cnv()`.
-#' @return A data frame containing the legacy annotation columns and a final
-#'   `MVP_score` column.
+#' @return A data frame containing the legacy annotation columns, a final
+#'   `MVP_score` model column, and contract columns for provider, assembly,
+#'   resource release, model identity, policy identity, and status.
 #' @export
 predict_cnv <- function(
   x, resources, model = NULL, overlap_backend = c("duckdb", "reference")
@@ -246,6 +247,21 @@ predict_cnv <- function(
   if (length(score) != nrow(features)) {
     stop("model returned one score per CNV is required", call. = FALSE)
   }
-  features$MVP_score <- score
-  features
+  model_id <- .xcnv_model_id
+  if (!is.null(model$metadata) && "source_kind" %in% names(model$metadata) &&
+      identical(model$metadata[["source_kind"]], "synthetic-test-only")) {
+    model_id <- "synthetic-test-only"
+  }
+  contract <- data.frame(
+    provider_id = resources$provider_id,
+    assembly = resources$assembly,
+    resource_release = resources$resource_release,
+    model_id = model_id,
+    policy_id = NA_character_,
+    status = resources$status,
+    stringsAsFactors = FALSE
+  )
+  contract <- contract[rep.int(1L, nrow(features)), , drop = FALSE]
+  rownames(contract) <- NULL
+  cbind(features, contract, MVP_score = score)
 }

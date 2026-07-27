@@ -9,18 +9,24 @@ score_cnv_2019(evidence, detail = c("summary", "groups"))
 \arguments{
 \item{evidence}{Data frame with \code{cnv_id}, \code{cnv_type}, \code{criterion}, \code{score},
 \code{source_id}, \code{source_release}, and \code{evidence_id}; optional logical
-\code{selected} defaults to \code{TRUE}.}
+\code{selected} defaults to \code{TRUE}. Optional contract columns include
+\code{provider_id}, \code{assembly}, \code{policy_id}, and \code{status}.}
 
 \item{detail}{\code{"summary"} for one row per CNV or \code{"groups"} for the capped
 criterion-group audit relation.}
 }
 \value{
-A data frame.
+A data frame. Summary rows include policy status and linked evidence
+counts/identities without treating provenance as scoring input.
 }
 \description{
 The input is an auditable evidence relation. Every row names its CNV,
 deletion/gain context, criterion, numeric score, source, source release, and
 evidence record. Repeated case evidence is capped by the published criterion
 group maximum/minimum. Evidence selection remains explicit and is never
-inferred from free text or phenotype similarity by this function.
+inferred from free text or phenotype similarity by this function. Contracts
+are resolved independently for each \verb{(cnv_id, cnv_type)}. Evidence and
+group rows retain contributing source identities and linked evidence counts;
+the summary provider is the XCNV ACMG/ClinGen policy kernel. Only \code{supported}
+status emits a clinical classification.
 }

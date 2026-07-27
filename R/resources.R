@@ -13,6 +13,8 @@
   group = c(
     rep("annotations", 9L), "model"
   ),
+  assembly = rep("GRCh37", 10L),
+  source_release = rep(.xcnv_compatibility_release, 10L),
   stringsAsFactors = FALSE
 )
 .xcnv_model_candidates <- c("xcnv.portable.model.tsv", "xcnv.fixture.model.tsv")
@@ -23,8 +25,8 @@
 #' annotations are external resources; the model entry is an optional override
 #' for the bundled classifier.
 #'
-#' @return A data frame describing required resource keys, file names, and
-#'   groups.
+#' @return A data frame describing required resource keys, file names, groups,
+#'   declared assembly, and source release.
 #' @export
 xcnv_resource_manifest <- function() {
   .xcnv_resource_spec
@@ -59,14 +61,19 @@ xcnv_resource_manifest <- function() {
 #' @param require Resource groups to require: `"annotations"` (the default),
 #'   `"model"`, or `"all"`. A model file is required only when `"model"` or
 #'   `"all"` is requested; otherwise prediction uses the bundled model.
+#' @param assembly Assembly declared for the resource bundle. The X-CNV
+#'   compatibility lane currently supports only `"GRCh37"`.
 #' @return An object of class `xcnv_resources`, containing the normalized root
 #'   and resolved resource paths.
 #' @export
-validate_xcnv_resources <- function(path = NULL, require = "annotations") {
+validate_xcnv_resources <- function(
+  path = NULL, require = "annotations", assembly = "GRCh37"
+) {
   require <- match.arg(require, c("annotations", "model", "all"), several.ok = TRUE)
   if ("all" %in% require) {
     require <- c("annotations", "model")
   }
+  contract <- .xcnv_resource_contract(assembly)
   root <- .resolve_resource_root(path)
   needed <- .xcnv_resource_spec$key[.xcnv_resource_spec$group %in% require]
   files <- vector("list", length(.xcnv_resource_spec$key))
@@ -92,7 +99,8 @@ validate_xcnv_resources <- function(path = NULL, require = "annotations") {
       call. = FALSE
     )
   }
-  structure(list(root = root, files = files, required = require), class = "xcnv_resources")
+  structure(c(list(root = root, files = files, required = require), contract),
+            class = "xcnv_resources")
 }
 
 #' Discover an X-CNV resource bundle
@@ -103,10 +111,11 @@ validate_xcnv_resources <- function(path = NULL, require = "annotations") {
 #'
 #' @param path Resource directory, or `NULL` to use `XCNV_RESOURCE_DIR`.
 #' @param require Resource groups to require.
+#' @param assembly Assembly declared for the resource bundle.
 #' @return An object of class `xcnv_resources`.
 #' @export
-xcnv_resources <- function(path = NULL, require = "annotations") {
-  validate_xcnv_resources(path = path, require = require)
+xcnv_resources <- function(path = NULL, require = "annotations", assembly = "GRCh37") {
+  validate_xcnv_resources(path = path, require = require, assembly = assembly)
 }
 
 #' Locate the bundled deterministic fixture

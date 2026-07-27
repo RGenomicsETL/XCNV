@@ -30,8 +30,11 @@ xcnv_real_example <- function() {
     start = as.integer(case$grch37_start0),
     end = as.integer(case$grch37_end0),
     type = as.character(case$cnv_type),
+    assembly = "GRCh37",
     stringsAsFactors = FALSE
   )
+  genes$assembly <- "GRCh37"
+  dosage$assembly <- "GRCh37"
   list(
     cnv = cnv,
     clinvar = case,

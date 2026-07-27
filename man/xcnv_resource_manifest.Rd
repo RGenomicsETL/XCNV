@@ -7,8 +7,8 @@
 xcnv_resource_manifest()
 }
 \value{
-A data frame describing required resource keys, file names, and
-groups.
+A data frame describing required resource keys, file names, groups,
+declared assembly, and source release.
 }
 \description{
 Return the file names and resource groups understood by the package. Large

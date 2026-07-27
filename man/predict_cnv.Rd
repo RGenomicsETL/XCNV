@@ -22,8 +22,9 @@ when present, otherwise the bundled published model is used.}
 \item{overlap_backend}{Passed to \code{annotate_cnv()}.}
 }
 \value{
-A data frame containing the legacy annotation columns and a final
-\code{MVP_score} column.
+A data frame containing the legacy annotation columns, a final
+\code{MVP_score} model column, and contract columns for provider, assembly,
+resource release, model identity, policy identity, and status.
 }
 \description{
 Annotate CNVs and compute the X-CNV MVP score. With an upstream model this

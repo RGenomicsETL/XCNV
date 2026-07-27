@@ -37,5 +37,8 @@ established ClinGen dosage records: section 1 content, section 2A complete
 dosage-feature containment, and section 3 protein-coding gene count. Case,
 phenotype, segregation, population, partial-gene, and inheritance evidence
 are intentionally not inferred. Inputs are BED half-open relations and must
-carry source identifiers and releases.
+carry source identifiers and releases. An optional \code{assembly} column is
+accepted on all three relations; when present it must be complete and
+identical across them. GRCh37 and GRCh38 are recognized; other assemblies
+remain explicit as \code{unsupported} in the output contract.
 }

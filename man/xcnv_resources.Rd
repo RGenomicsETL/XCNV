@@ -4,12 +4,14 @@
 \alias{xcnv_resources}
 \title{Discover an X-CNV resource bundle}
 \usage{
-xcnv_resources(path = NULL, require = "annotations")
+xcnv_resources(path = NULL, require = "annotations", assembly = "GRCh37")
 }
 \arguments{
 \item{path}{Resource directory, or \code{NULL} to use \code{XCNV_RESOURCE_DIR}.}
 
 \item{require}{Resource groups to require.}
+
+\item{assembly}{Assembly declared for the resource bundle.}
 }
 \value{
 An object of class \code{xcnv_resources}.

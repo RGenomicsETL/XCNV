@@ -136,11 +136,34 @@ classify_cnv_score <- function(score) {
   out$score <- suppressWarnings(as.numeric(out$score))
   if (!"selected" %in% names(out)) out$selected <- TRUE
   if (!is.logical(out$selected) || anyNA(out$selected)) stop("evidence selected must be TRUE or FALSE", call. = FALSE)
+
+  if (!"assembly" %in% names(out)) out$assembly <- rep(NA_character_, nrow(out))
+  out$assembly <- vapply(as.character(out$assembly), .xcnv_canonical_assembly, character(1))
+  if (!"provider_id" %in% names(out)) {
+    out$provider_id <- as.character(out$source_id)
+  }
+  if (!"model_id" %in% names(out)) out$model_id <- rep(NA_character_, nrow(out))
+  if (!"policy_id" %in% names(out)) out$policy_id <- rep(.xcnv_policy_id, nrow(out))
+  if (!"status" %in% names(out)) {
+    out$status <- ifelse(
+      is.na(out$assembly), "unspecified",
+      ifelse(out$assembly %in% c("GRCh37", "GRCh38"), "supported", "unsupported")
+    )
+  }
+  for (column in c("provider_id", "model_id", "policy_id", "status")) {
+    out[[column]] <- as.character(out[[column]])
+  }
+  allowed_status <- c("supported", "unspecified", "unsupported", "conflict")
+  if (any(!out$status %in% allowed_status)) {
+    stop("evidence status must be supported, unspecified, unsupported, or conflict", call. = FALSE)
+  }
   if (any(!nzchar(out$cnv_id)) || any(!out$cnv_type %in% c("loss", "gain")) ||
       any(!nzchar(out$criterion)) || any(!is.finite(out$score)) ||
       any(!nzchar(out$source_id)) || any(!nzchar(out$source_release)) ||
-      any(!nzchar(out$evidence_id))) {
-    stop("evidence identifiers, provenance, CNV type, and score must be explicit", call. = FALSE)
+      any(!nzchar(out$evidence_id)) || any(is.na(out$provider_id)) ||
+      any(!nzchar(out$provider_id)) || any(is.na(out$policy_id)) ||
+      any(!nzchar(out$policy_id))) {
+    stop("evidence identifiers, provenance, contract identity, CNV type, and score must be explicit", call. = FALSE)
   }
   keys <- paste(out$cnv_type, out$criterion, sep = ":")
   contract_keys <- paste(.cnv_2019_criteria$cnv_type, .cnv_2019_criteria$criterion, sep = ":")
@@ -166,13 +189,99 @@ classify_cnv_score <- function(score) {
   out
 }
 
+.cnv_2019_identity_values <- function(x) {
+  values <- unique(as.character(x))
+  sort(values[!is.na(values) & nzchar(values)])
+}
+
+.cnv_2019_identity_scalar <- function(x) {
+  values <- .cnv_2019_identity_values(x)
+  if (length(values) == 1L) values[[1L]] else NA_character_
+}
+
+.cnv_2019_evidence_links <- function(evidence) {
+  data.frame(
+    provider_id = .cnv_2019_identity_scalar(evidence$provider_id),
+    source_id = .cnv_2019_identity_scalar(evidence$source_id),
+    source_release = .cnv_2019_identity_scalar(evidence$source_release),
+    evidence_id = .cnv_2019_identity_scalar(evidence$evidence_id),
+    evidence_count = nrow(evidence),
+    evidence_provider_count = length(.cnv_2019_identity_values(evidence$provider_id)),
+    evidence_source_count = length(.cnv_2019_identity_values(evidence$source_id)),
+    evidence_release_count = length(.cnv_2019_identity_values(evidence$source_release)),
+    stringsAsFactors = FALSE
+  )
+}
+
+.cnv_2019_output_contract <- function(evidence) {
+  if (!nrow(evidence)) {
+    return(data.frame(
+      cnv_id = character(), cnv_type = character(), assembly = character(),
+      resource_release = character(), policy_id = character(), model_id = character(),
+      status = character(), evidence_count = integer(), selected_evidence_count = integer(),
+      evidence_provider_count = integer(), evidence_source_count = integer(),
+      evidence_release_count = integer(), evidence_id = character(),
+      evidence_provider_id = character(), evidence_source_id = character(),
+      evidence_source_release = character(), stringsAsFactors = FALSE
+    ))
+  }
+  key <- paste(evidence$cnv_id, evidence$cnv_type, sep = "\r")
+  split_rows <- split(seq_len(nrow(evidence)), key)
+  rows <- lapply(split_rows, function(i) {
+    x <- evidence[i, , drop = FALSE]
+    assemblies <- .cnv_2019_identity_values(x$assembly)
+    statuses <- .cnv_2019_identity_values(x$status)
+    policies <- .cnv_2019_identity_values(x$policy_id)
+    status <- if (length(statuses) == 1L) statuses[[1L]] else "conflict"
+    if (length(assemblies) > 1L || (length(assemblies) && anyNA(x$assembly))) {
+      status <- "conflict"
+    }
+    if (length(policies) > 1L) status <- "conflict"
+    if (!length(assemblies) && identical(status, "supported")) status <- "unspecified"
+    if (length(assemblies) == 1L && !assemblies[[1L]] %in% c("GRCh37", "GRCh38") &&
+        !identical(status, "conflict")) {
+      status <- "unsupported"
+    }
+    links <- .cnv_2019_evidence_links(x)
+    data.frame(
+      cnv_id = as.character(x$cnv_id[[1L]]),
+      cnv_type = as.character(x$cnv_type[[1L]]),
+      assembly = if (length(assemblies)) assemblies[[1L]] else NA_character_,
+      resource_release = links$source_release,
+      policy_id = .xcnv_policy_id,
+      model_id = NA_character_,
+      status = status,
+      evidence_count = links$evidence_count,
+      selected_evidence_count = sum(x$selected),
+      evidence_provider_count = links$evidence_provider_count,
+      evidence_source_count = links$evidence_source_count,
+      evidence_release_count = links$evidence_release_count,
+      evidence_id = links$evidence_id,
+      evidence_provider_id = links$provider_id,
+      evidence_source_id = links$source_id,
+      evidence_source_release = links$source_release,
+      stringsAsFactors = FALSE
+    )
+  })
+  out <- do.call(rbind, rows)
+  rownames(out) <- NULL
+  out[order(out$cnv_id, out$cnv_type), , drop = FALSE]
+}
+
 .score_cnv_2019_groups <- function(evidence) {
   evidence <- .normalize_cnv_evidence(evidence)
+  contracts <- .cnv_2019_output_contract(evidence)
   selected <- evidence[evidence$selected, , drop = FALSE]
   if (!nrow(selected)) {
     return(data.frame(
       cnv_id = character(), cnv_type = character(), cap_group = character(),
-      raw_score = numeric(), applied_score = numeric(), source_count = integer()
+      raw_score = numeric(), applied_score = numeric(), source_count = integer(),
+      provider_id = character(), source_id = character(), source_release = character(),
+      evidence_id = character(), evidence_count = integer(),
+      evidence_provider_count = integer(), evidence_source_count = integer(),
+      evidence_release_count = integer(), assembly = character(), resource_release = character(),
+      model_id = character(), policy_id = character(), status = character(),
+      stringsAsFactors = FALSE
     ))
   }
   key <- interaction(selected$cnv_id, selected$cnv_type, selected$cap_group, drop = TRUE, lex.order = TRUE)
@@ -182,11 +291,22 @@ classify_cnv_score <- function(score) {
     lower <- unique(selected$group_min[i])
     upper <- unique(selected$group_max[i])
     if (length(lower) != 1L || length(upper) != 1L) stop("inconsistent criterion cap group", call. = FALSE)
+    links <- .cnv_2019_evidence_links(selected[i, , drop = FALSE])
+    contract_key <- paste(selected$cnv_id[i[[1L]]], selected$cnv_type[i[[1L]]], sep = "\r")
+    contract <- contracts[paste(contracts$cnv_id, contracts$cnv_type, sep = "\r") == contract_key, , drop = FALSE]
     data.frame(
       cnv_id = selected$cnv_id[i[[1L]]], cnv_type = selected$cnv_type[i[[1L]]],
       cap_group = selected$cap_group[i[[1L]]], raw_score = raw,
       applied_score = min(upper, max(lower, raw)), source_count = length(i),
-      stringsAsFactors = FALSE
+      provider_id = links$provider_id, source_id = links$source_id,
+      source_release = links$source_release, evidence_id = links$evidence_id,
+      evidence_count = links$evidence_count,
+      evidence_provider_count = links$evidence_provider_count,
+      evidence_source_count = links$evidence_source_count,
+      evidence_release_count = links$evidence_release_count,
+      assembly = contract$assembly[[1L]], resource_release = links$source_release,
+      model_id = NA_character_, policy_id = contract$policy_id[[1L]],
+      status = contract$status[[1L]], stringsAsFactors = FALSE
     )
   })
   out <- do.call(rbind, rows)
@@ -200,33 +320,67 @@ classify_cnv_score <- function(score) {
 #' deletion/gain context, criterion, numeric score, source, source release, and
 #' evidence record. Repeated case evidence is capped by the published criterion
 #' group maximum/minimum. Evidence selection remains explicit and is never
-#' inferred from free text or phenotype similarity by this function.
+#' inferred from free text or phenotype similarity by this function. Contracts
+#' are resolved independently for each `(cnv_id, cnv_type)`. Evidence and
+#' group rows retain contributing source identities and linked evidence counts;
+#' the summary provider is the XCNV ACMG/ClinGen policy kernel. Only `supported`
+#' status emits a clinical classification.
 #'
 #' @param evidence Data frame with `cnv_id`, `cnv_type`, `criterion`, `score`,
 #'   `source_id`, `source_release`, and `evidence_id`; optional logical
-#'   `selected` defaults to `TRUE`.
+#'   `selected` defaults to `TRUE`. Optional contract columns include
+#'   `provider_id`, `assembly`, `policy_id`, and `status`.
 #' @param detail `"summary"` for one row per CNV or `"groups"` for the capped
 #'   criterion-group audit relation.
-#' @return A data frame.
+#' @return A data frame. Summary rows include policy status and linked evidence
+#'   counts/identities without treating provenance as scoring input.
 #' @export
 score_cnv_2019 <- function(evidence, detail = c("summary", "groups")) {
   detail <- match.arg(detail)
-  groups <- .score_cnv_2019_groups(evidence)
+  normalized <- .normalize_cnv_evidence(evidence)
+  groups <- .score_cnv_2019_groups(normalized)
   if (identical(detail, "groups")) return(groups)
+  contracts <- .cnv_2019_output_contract(normalized)
   if (!nrow(groups)) {
     return(data.frame(
       cnv_id = character(), cnv_type = character(), score = numeric(),
-      classification = classify_cnv_score(numeric())
+      classification = character(), criterion_groups = integer(),
+      provider_id = character(), assembly = character(), resource_release = character(),
+      model_id = character(), policy_id = character(), status = character(),
+      evidence_count = integer(), selected_evidence_count = integer(),
+      evidence_provider_count = integer(), evidence_source_count = integer(),
+      evidence_release_count = integer(), evidence_id = character(),
+      evidence_provider_id = character(), evidence_source_id = character(),
+      evidence_source_release = character(), stringsAsFactors = FALSE
     ))
   }
-  key <- interaction(groups$cnv_id, groups$cnv_type, drop = TRUE, lex.order = TRUE)
-  split_rows <- split(seq_len(nrow(groups)), key)
-  rows <- lapply(split_rows, function(i) {
-    score <- sum(groups$applied_score[i])
+  contracts <- contracts[contracts$selected_evidence_count > 0L, , drop = FALSE]
+  rows <- lapply(seq_len(nrow(contracts)), function(i) {
+    contract <- contracts[i, , drop = FALSE]
+    group_rows <- groups[groups$cnv_id == contract$cnv_id[[1L]] &
+      groups$cnv_type == contract$cnv_type[[1L]], , drop = FALSE]
+    score <- sum(group_rows$applied_score)
+    classification <- if (identical(contract$status[[1L]], "supported")) {
+      as.character(classify_cnv_score(score))
+    } else {
+      NA_character_
+    }
     data.frame(
-      cnv_id = groups$cnv_id[i[[1L]]], cnv_type = groups$cnv_type[i[[1L]]],
-      score = score, classification = as.character(classify_cnv_score(score)),
-      criterion_groups = length(i), stringsAsFactors = FALSE
+      cnv_id = contract$cnv_id, cnv_type = contract$cnv_type,
+      score = score, classification = classification,
+      criterion_groups = nrow(group_rows), provider_id = .xcnv_acmg_provider_id,
+      assembly = contract$assembly, resource_release = contract$resource_release,
+      model_id = NA_character_, policy_id = .xcnv_policy_id,
+      status = contract$status, evidence_count = contract$evidence_count,
+      selected_evidence_count = contract$selected_evidence_count,
+      evidence_provider_count = contract$evidence_provider_count,
+      evidence_source_count = contract$evidence_source_count,
+      evidence_release_count = contract$evidence_release_count,
+      evidence_id = contract$evidence_id,
+      evidence_provider_id = contract$evidence_provider_id,
+      evidence_source_id = contract$evidence_source_id,
+      evidence_source_release = contract$evidence_source_release,
+      stringsAsFactors = FALSE
     )
   })
   out <- do.call(rbind, rows)
@@ -249,7 +403,10 @@ score_cnv_2019 <- function(evidence, detail = c("summary", "groups")) {
 #' dosage-feature containment, and section 3 protein-coding gene count. Case,
 #' phenotype, segregation, population, partial-gene, and inheritance evidence
 #' are intentionally not inferred. Inputs are BED half-open relations and must
-#' carry source identifiers and releases.
+#' carry source identifiers and releases. An optional `assembly` column is
+#' accepted on all three relations; when present it must be complete and
+#' identical across them. GRCh37 and GRCh38 are recognized; other assemblies
+#' remain explicit as `unsupported` in the output contract.
 #'
 #' @param cnvs Data frame with `cnv_id`, `chr`, `start`, `end`, and `cnv_type`
 #'   (`"loss"` or `"gain"`).
@@ -282,6 +439,9 @@ derive_cnv_2019_evidence <- function(
   cnvs <- as.data.frame(cnvs, stringsAsFactors = FALSE)
   genes <- as.data.frame(genes, stringsAsFactors = FALSE)
   dosage <- as.data.frame(dosage, stringsAsFactors = FALSE)
+  relation_contract <- .xcnv_validate_relation_assemblies(
+    list(cnvs, genes, dosage), c("cnvs", "genes", "dosage")
+  )
   if (anyDuplicated(cnvs$cnv_id) || any(!cnvs$cnv_type %in% c("loss", "gain"))) {
     stop("cnv_id must be unique and cnv_type must be loss or gain", call. = FALSE)
   }
@@ -300,7 +460,10 @@ derive_cnv_2019_evidence <- function(
       cnv_id = as.character(cnv$cnv_id), cnv_type = as.character(cnv$cnv_type),
       criterion = criterion, score = score, source_id = source_id,
       source_release = source_release, evidence_id = evidence_id,
-      selected = TRUE, stringsAsFactors = FALSE
+      selected = TRUE, provider_id = source_id,
+      assembly = relation_contract$assembly, model_id = NA_character_,
+      policy_id = .xcnv_policy_id, status = relation_contract$status,
+      stringsAsFactors = FALSE
     )
   }
   for (i in seq_len(nrow(cnvs))) {
@@ -339,7 +502,9 @@ derive_cnv_2019_evidence <- function(
     return(data.frame(
       cnv_id = character(), cnv_type = character(), criterion = character(),
       score = numeric(), source_id = character(), source_release = character(),
-      evidence_id = character(), selected = logical()
+      evidence_id = character(), selected = logical(), provider_id = character(),
+      assembly = character(), model_id = character(), policy_id = character(),
+      status = character()
     ))
   }
   do.call(rbind, rows)

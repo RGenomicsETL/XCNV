@@ -22,7 +22,8 @@ knitr::opts_chunk$set(
 XCNV annotates copy-number variants and evaluates the published X-CNV
 classifier without bedtools or a runtime XGBoost dependency. It also provides a
 separate ACMG/ClinGen 2019 lane in which every selected criterion remains a row
-that can be inspected, changed, and rescored.
+that can be inspected, changed, and rescored. Every model or policy result is a
+table with provider, assembly, release, identity, and explicit status metadata.
 
 The implementation is table-oriented. DuckDB evaluates the genomic overlap and
 reciprocal-overlap joins; ordinary R owns input validation, feature reduction,
@@ -76,7 +77,10 @@ prediction[, c(
 ```
 
 `MVP_score` is the X-CNV model output; XCNV does not relabel it as an ACMG
-criterion or clinical class.
+criterion or clinical class. This published compatibility lane is calibrated
+for GRCh37/hg19. A GRCh38 resource declaration is explicitly unsupported until
+a separately validated GRCh38 model exists; XCNV never silently lifts and
+relabels the result.
 
 ## Inspectable ACMG/ClinGen evidence
 
@@ -90,9 +94,10 @@ cnv <- transform(
   cnv_id = example$clinvar$cnv_id,
   cnv_type = type
 )
-evidence <- derive_cnv_2019_evidence(
-  cnv, example$genes, example$dosage
-)
+cnv$assembly <- "GRCh37"
+genes <- transform(example$genes, assembly = "GRCh37")
+dosage <- transform(example$dosage, assembly = "GRCh37")
+evidence <- derive_cnv_2019_evidence(cnv, genes, dosage)
 evidence[, c(
   "criterion", "score", "source_id",
   "source_release", "evidence_id"
@@ -105,10 +110,21 @@ The rows can be scored directly:
 score_cnv_2019(evidence)
 ```
 
+Classification status is evaluated independently for each `(cnv_id, cnv_type)`.
+Only `supported` rows receive a clinical class; unspecified, unsupported, or
+conflicting assembly/policy contracts return `NA` while retaining linked
+evidence counts and provider/source identities. Releases are not collapsed into
+a misleading scalar when multiple releases contribute.
+
 Here criterion 2A supplies one point because the deletion completely contains
-an established haploinsufficient gene. The automatic provider does not invent
-phenotype, inheritance, segregation, population, case-report, or partial-gene
-evidence. Those require explicit additional evidence rows.
+an established haploinsufficient gene. The three relations declare one coherent
+assembly, and the output carries the ACMG/ClinGen policy identity separately
+from any X-CNV model output. The automatic provider does not invent phenotype,
+inheritance, segregation, population, case-report, or partial-gene evidence.
+Those require explicit additional evidence rows. DECIPHER may be used as an
+optional permitted source when the user has the required access and case-level
+controls; XCNV neither downloads nor bundles DECIPHER data and never infers
+protected case evidence.
 
 ## Published model without XGBoost
 
@@ -146,7 +162,8 @@ write_xcnv(predictions, "predictions.output.csv")
 ```
 
 `xcnv_resource_manifest()` lists the required files. `run_xcnv()` provides the
-same workflow as one call and writes only when an output path is supplied.
+same workflow as one call and writes only when an output path is supplied. The
+current ownership and relational boundary is [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 The compatibility contract, coordinate conventions, and current gaps are in
 [`docs/upstream-compatibility.md`](https://github.com/RGenomicsETL/XCNV/blob/main/docs/upstream-compatibility.md).

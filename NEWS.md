@@ -1,5 +1,18 @@
 # XCNV 0.0.0.9000
 
+* Corrected ACMG/ClinGen contract resolution to be per CNV. Evidence rows now
+  retain their source provider identity (including gene/dosage providers), while
+  summaries use only the policy-kernel provider. Group and summary provenance
+  is scalar only when unique, with counts otherwise; clinical classes emit only
+  for supported status, and unrelated releases are not concatenated.
+
+* Added an explicit relational contract for provider, assembly, resource
+  release, model/policy identity, and supported/unsupported/conflict status.
+  The X-CNV compatibility lane remains GRCh37-calibrated; the ACMG/ClinGen
+  2019 lane validates coherent declared assemblies and keeps model scores
+  separate from clinical classes. DECIPHER is documented only as an optional,
+  access-controlled evidence source and is not downloaded or bundled.
+
 * Bundled the published 41-node X-CNV classifier as a validated
   runtime-neutral R data object, and made it the default when an annotation
   resource directory does not supply an override. Runtime prediction remains
