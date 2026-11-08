@@ -103,13 +103,15 @@ read_cnv <- function(x) {
     cnvs <- rbind(altered, cnvs)
   }
 
-  if (nrow(cnvs) > 0L) {
-    chromosome_order <- match(cnvs$chr, c(as.character(seq_len(22L)), "X", "Y"))
-    cnvs <- cnvs[order(chromosome_order, cnvs$start, cnvs$end, seq_len(nrow(cnvs))), , drop = FALSE]
-    rownames(cnvs) <- NULL
-    cnvs$row_id <- seq_len(nrow(cnvs))
-  } else {
-    cnvs$row_id <- integer()
-  }
+  cnvs <- .prepare_input_order(cnvs)
+  cnvs$row_id <- seq_len(nrow(cnvs))
   list(data = cnvs, drop_first = drop_first, n_input = n_input)
+}
+
+# X-CNV output order: chromosome 1-22, X, Y, then start, end, and input order.
+.prepare_input_order <- function(cnvs) {
+  chromosome_order <- match(cnvs$chr, c(as.character(seq_len(22L)), "X", "Y"))
+  cnvs <- cnvs[order(chromosome_order, cnvs$start, cnvs$end, seq_len(nrow(cnvs))), , drop = FALSE]
+  rownames(cnvs) <- NULL
+  cnvs
 }

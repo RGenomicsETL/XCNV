@@ -50,8 +50,21 @@ only `supported` emits a clinical classification.
 
 - The published X-CNV compatibility model is calibrated against GRCh37/hg19
   resources. `xcnv_resources(assembly = "GRCh38")` is marked unsupported and
-  prediction refuses it; XCNV does not silently lift coordinates or claim
-  GRCh38 compatibility.
+  prediction refuses it; XCNV does not claim GRCh38 compatibility.
+- CNV calls on another assembly are scored only through an explicit
+  `xcnv_liftover()` declaration: the caller stages the chain and the source and
+  destination FASTA files and declares both assemblies and the chain release.
+  XCNV never downloads, bundles, or infers a liftover, and the destination
+  assembly must equal the resource assembly. DuckHTS `bcftools_liftover()`
+  lifts each CNV on XCNV's DuckDB connection as one symbolic `<DEL>` (loss) or
+  `<DUP>` (gain) record at POS `start + 1` with `END = end`; the lifted record
+  is read back as the BED interval `[POS - 1, END)`. Rows keep their input
+  coordinates and `assembly`, and add `lifted_assembly`, `lifted_chr`,
+  `lifted_start`, `lifted_end`, `liftover_chain`, `liftover_release`,
+  `liftover_length_ratio`, and `liftover_reason`. A call whose start or end
+  does not lift, whose end lifts before its start, or that lifts to another
+  contig or the reverse strand is `unsupported`, names that reason, and has no
+  features or `MVP_score`. The length ratio is reported, not gated.
 - The native ACMG/ClinGen lane accepts coherent CNV, gene, and dosage relations;
   nonempty relations declare one assembly. Before any overlap, all rows must have
   nonempty contigs and integer BED coordinates with `start < end` in the
