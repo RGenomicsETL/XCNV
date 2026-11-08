@@ -1,5 +1,14 @@
 # XCNV 0.0.0.9000
 
+* Added `tools/build_grch38_resources.R`, which builds the GRCh38 gene
+  (GENCODE 50) and ClinGen dosage relations of the ACMG/ClinGen 2019 lane as
+  Parquet from SHA-256-pinned sources, and fixed `tools/stage_cnv_resource.R`,
+  which rejected every download because it compared a hash object with a
+  string. The source list now names the UCSC chain and its non-commercial
+  licence, and records ClinGen's CC0 terms. The built relations are published
+  with the X-CNV GRCh37 resources in the Hugging Face dataset
+  `RgenomicsETL/xcnv-resources`.
+
 * Added GRCh38 input to the X-CNV model lane through an explicit
   `xcnv_liftover()` declaration of a staged chain, both FASTA references, their
   assemblies, and the chain release. `predict_cnv()` and `run_xcnv()` lift each
