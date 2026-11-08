@@ -8,7 +8,8 @@ predict_cnv(
   x,
   resources,
   model = NULL,
-  overlap_backend = c("duckdb", "reference")
+  overlap_backend = c("duckdb", "reference"),
+  liftover = NULL
 )
 }
 \arguments{
@@ -20,14 +21,34 @@ predict_cnv(
 when present, otherwise the bundled published model is used.}
 
 \item{overlap_backend}{Passed to \code{annotate_cnv()}.}
+
+\item{liftover}{\code{NULL} when \code{x} is on the resource assembly, or an
+\code{xcnv_liftover()} declaration from the assembly of \code{x} to the resource
+assembly.}
 }
 \value{
 A data frame containing the legacy annotation columns, a final
 \code{MVP_score} model column, and contract columns for provider, assembly,
-resource release, model identity, policy identity, and status.
+resource release, model identity, policy identity, and status. \code{assembly}
+is the assembly of \code{Chr}, \code{Start}, and \code{End}. With \code{liftover}, the columns
+\code{lifted_assembly}, \code{lifted_chr}, \code{lifted_start}, \code{lifted_end} (BED
+half-open), \code{liftover_chain}, \code{liftover_release}, \code{liftover_length_ratio}
+(lifted over input BED width), and \code{liftover_reason} (one of
+\code{source_contig_absent}, \code{start_unmapped}, \code{end_unmapped},
+\code{end_before_start}, \code{contig_changed}, \code{strand_reversed}, or \code{NA} for a
+supported row) precede \code{MVP_score}.
 }
 \description{
 Annotate CNVs and compute the X-CNV MVP score. With an upstream model this
 evaluates a staged \code{xcnv-tree-v1} artifact in ordinary R. Installing and
 running the package does not require XGBoost.
+}
+\details{
+The published model is calibrated on GRCh37 resources. CNV calls on another
+assembly are scored only through an explicit \code{liftover} declaration whose
+destination assembly matches the resources. Then every row keeps its input
+coordinates in \code{Chr}, \code{Start}, and \code{End}, and the annotation features and
+\code{MVP_score} are computed on the lifted interval. A call that does not lift
+to one interval on the same contig and strand is \code{unsupported}, names its
+\code{liftover_reason}, and has missing features and no \code{MVP_score}.
 }

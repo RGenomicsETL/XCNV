@@ -48,27 +48,33 @@
   do.call(rbind, out)
 }
 
-.new_overlap_context <- function(backend = c("duckdb", "reference")) {
+.new_overlap_context <- function(backend = c("duckdb", "reference"), duckhts = FALSE) {
   backend <- match.arg(backend)
   context <- new.env(parent = emptyenv())
   context$backend <- backend
   context$counter <- 0L
   context$con <- NULL
-  if (identical(backend, "duckdb")) {
+  if (identical(backend, "duckdb") || duckhts) {
     config <- list()
     if (is.null(getOption("duckdb.extension_directory")) &&
         !nzchar(Sys.getenv("DUCKDB_EXTENSION_DIRECTORY", unset = ""))) {
       # DuckDB >= 1.5 warns when it chooses the session cache itself. XCNV
-      # neither installs nor loads extensions, so choose that same cache
-      # explicitly without changing the caller's global configuration.
+      # installs no extensions, so choose that same cache explicitly without
+      # changing the caller's global configuration.
       config$extension_directory <- file.path(tempdir(), "duckdb", "extensions")
     }
-    driver <- if ("shared_home" %in% names(formals(duckdb::duckdb))) {
-      duckdb::duckdb(config = config, shared_home = FALSE)
+    if (duckhts) {
+      # A declared liftover loads the DuckHTS extension bundled with Rduckhts;
+      # Rduckhts owns the connection policy that extension loading requires.
+      context$con <- Rduckhts::rduckhts_connect(config = config)
     } else {
-      duckdb::duckdb(config = config)
+      driver <- if ("shared_home" %in% names(formals(duckdb::duckdb))) {
+        duckdb::duckdb(config = config, shared_home = FALSE)
+      } else {
+        duckdb::duckdb(config = config)
+      }
+      context$con <- DBI::dbConnect(driver, dbdir = ":memory:")
     }
-    context$con <- DBI::dbConnect(driver, dbdir = ":memory:")
   }
   context
 }
@@ -425,17 +431,26 @@ annotate_cnv <- function(x, resources, overlap_backend = c("duckdb", "reference"
   } else {
     xcnv_resources(resources, require = "annotations")
   }
+  .xcnv_require_supported(resources)
+  context <- .new_overlap_context(overlap_backend)
+  on.exit(.close_overlap_context(context), add = TRUE)
+  .annotate_cnv_with(x, resources, context)
+}
+
+.xcnv_require_supported <- function(resources) {
   if (!identical(resources$status, "supported")) {
     stop(
       "X-CNV compatibility resources have unsupported assembly/status: ",
       resources$status, call. = FALSE
     )
   }
+  invisible(TRUE)
+}
+
+.annotate_cnv_with <- function(x, resources, context) {
   prepared <- .prepare_cnv(x)
   a <- prepared$data
   annotation <- .load_annotation_resources(resources)
-  context <- .new_overlap_context(overlap_backend)
-  on.exit(.close_overlap_context(context), add = TRUE)
   ljb <- .compute_ljb(a, annotation, context)
   cdts <- .compute_cdts(a, annotation, context)
   frequency <- .compute_frequency(a, annotation, context)
