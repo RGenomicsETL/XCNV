@@ -14,8 +14,8 @@ xcnv_liftover(
 )
 }
 \arguments{
-\item{chain}{UCSC chain file from \code{source_assembly} to
-\code{destination_assembly}.}
+\item{chain}{Chain file, in the UCSC chain format, from \code{source_assembly}
+to \code{destination_assembly}; plain or gzip-compressed.}
 
 \item{source_fasta}{FASTA reference of \code{source_assembly}.}
 

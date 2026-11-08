@@ -1,11 +1,18 @@
 # XCNV 0.0.0.9000
 
+* The documented GRCh38 to GRCh37 chain is now Ensembl's
+  `GRCh38_to_GRCh37.chain.gz` (assembly mapping, release 76), which Ensembl
+  publishes without restriction on use; the UCSC `hg38ToHg19` chain is
+  licensed for non-commercial use only. `tools/build_grch38_resources.R` pins
+  the Ensembl chain by SHA-256 and copies it to `liftover/`, and the Hugging
+  Face dataset carries it there. A test shows that a chain without `chr`
+  names, gzip-compressed, lifts calls on a `chr`-named FASTA to the same rows.
+
 * Added `tools/build_grch38_resources.R`, which builds the GRCh38 gene
   (GENCODE 50) and ClinGen dosage relations of the ACMG/ClinGen 2019 lane as
   Parquet from SHA-256-pinned sources, and fixed `tools/stage_cnv_resource.R`,
   which rejected every download because it compared a hash object with a
-  string. The source list now names the UCSC chain and its non-commercial
-  licence, and records ClinGen's CC0 terms. The built relations are published
+  string. The source list records ClinGen's CC0 terms. The built relations are published
   with the X-CNV GRCh37 resources in the Hugging Face dataset
   `RgenomicsETL/xcnv-resources`.
 

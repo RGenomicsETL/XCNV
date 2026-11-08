@@ -4,14 +4,15 @@
 # lane from pinned sources. Each source is staged by stage_cnv_resource.R,
 # which checks its SHA-256 and writes a receipt. ClinGen publishes its
 # curation lists nightly at fixed URLs: a new download needs new pins and a new
-# release date below. The UCSC chain is staged for liftover consumers; its
-# licence is non-commercial (see the dataset card), so it is not converted.
+# release date below. The Ensembl GRCh38 to GRCh37 chain is staged for the
+# liftover of the X-CNV lane and copied unchanged to liftover/.
 #
 # Output, under OUTPUT_DIR:
 #   sources/<file> and sources/<file>.receipt.tsv   staged inputs
 #   grch38/genes.parquet                           gene relation
 #   grch38/dosage.parquet                          dosage relation
 #   grch38/sources.tsv                             receipts of all inputs
+#   liftover/GRCh38_to_GRCh37.chain.gz             Ensembl chain
 
 arguments <- commandArgs(trailingOnly = TRUE)
 if (length(arguments) != 1L) {
@@ -29,20 +30,20 @@ stage_script <- file.path(dirname(normalizePath(script)), "stage_cnv_resource.R"
 gencode_release <- "50"
 clingen_release <- "2026-11-08"
 pins <- data.frame(
-  source_id = c("gencode", "clingen_dosage", "clingen_dosage", "ucsc_liftover"),
-  release = c(gencode_release, clingen_release, clingen_release, "hg38ToHg19-2014-01-01"),
+  source_id = c("gencode", "clingen_dosage", "clingen_dosage", "ensembl_assembly_mapping"),
+  release = c(gencode_release, clingen_release, clingen_release, "76"),
   assembly = c("GRCh38", "GRCh38", "GRCh38", "GRCh38,GRCh37"),
   url = c(
     "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_50/gencode.v50.basic.annotation.gtf.gz",
     "https://ftp.clinicalgenome.org/ClinGen_gene_curation_list_GRCh38.tsv",
     "https://ftp.clinicalgenome.org/ClinGen_region_curation_list_GRCh38.tsv",
-    "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/liftOver/hg38ToHg19.over.chain.gz"
+    "https://ftp.ensembl.org/pub/assembly_mapping/homo_sapiens/GRCh38_to_GRCh37.chain.gz"
   ),
   sha256 = c(
     "5b9ad9aa71f6ab5d55123c51f74723644a895bc0cbaa9cee8fbc11bb9dec0bf7",
     "2b3f8318df9114b01095576cae3b90683d5a295353fe01f6e51b8e7d6184590a",
     "06bd0333e2c94585c3f823a69be220e07e0c0e1e82dc47e6a325fa734ab8d454",
-    "14a712e8e147d9fc8e9d87d51977b46f6f8ddb93efbe5d0843d86b6205f587b1"
+    "6bee5bfdd6defc0fb2bd388ef51819c32bbfae1d3e7a3345aa5ebbdc3dd492b1"
   ),
   stringsAsFactors = FALSE
 )
@@ -142,6 +143,12 @@ utils::write.table(
   receipts, file.path(relation_dir, "sources.tsv"), sep = "\t", quote = FALSE,
   row.names = FALSE, na = ""
 )
+liftover_dir <- file.path(output_dir, "liftover")
+dir.create(liftover_dir, showWarnings = FALSE)
+chain <- source_file[["GRCh38_to_GRCh37.chain.gz"]]
+if (!file.copy(chain, file.path(liftover_dir, basename(chain)), overwrite = TRUE)) {
+  stop("could not copy the chain to ", liftover_dir, call. = FALSE)
+}
 message(
   "genes: ", nrow(genes), " rows; dosage: ", nrow(dosage), " rows (",
   sum(dosage$record_type == "gene"), " genes, ", sum(dosage$record_type == "region"), " regions)"
