@@ -2,222 +2,145 @@
 title: "XCNV"
 output:
   github_document:
-    toc: true
     html_preview: false
 ---
 
 <!-- README.md is rendered from this file. -->
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>",
-  fig.path = "man/figures/README-",
-  out.width = "100%"
-)
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 ```
 
-# XCNV
+XCNV annotates copy-number variants (CNVs) and scores them in two separate
+lanes:
 
-XCNV annotates copy-number variants and evaluates the published X-CNV
-classifier without bedtools or a runtime XGBoost dependency. It also provides a
-separate ACMG/ClinGen 2019 lane in which every selected criterion remains a row
-that can be inspected, changed, and rescored. Every model or policy result is a
-table with provider, assembly, release, identity, and explicit status metadata.
+- **X-CNV**: the published X-CNV model (Zhang et al. 2021) gives each CNV an
+  `MVP_score`, a model probability of pathogenicity. It is not a clinical class.
+- **ACMG/ClinGen**: the 2019 constitutional CNV standard. Each criterion is one
+  evidence row that you can inspect, change and rescore.
 
-The implementation is table-oriented. DuckDB evaluates the genomic overlap and
-reciprocal-overlap joins; ordinary R owns input validation, feature reduction,
-the portable tree evaluator, and evidence scoring.
+DuckDB does the overlap joins. R does validation, feature reduction, the tree
+evaluator and scoring. No bedtools and no XGBoost are needed at run time.
+Ownership, output contracts and validation rules are in
+[`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Installation
 
 ```r
 install.packages(
   "XCNV",
-  repos = c(
-    "https://rgenomicsetl.r-universe.dev",
-    "https://cloud.r-project.org"
-  )
+  repos = c("https://rgenomicsetl.r-universe.dev", "https://cloud.r-project.org")
 )
 ```
 
-## A real ClinVar deletion
+## Example: a ClinVar deletion
 
-The package includes a compact, case-limited annotation set for ClinVar allele
-72461: a pathogenic deletion containing `SOX2`. This is a real scientific
-example, not the synthetic fixture used by the test suite.
+The package includes the annotations for one real case, ClinVar allele 72461:
+a pathogenic deletion that contains `SOX2`.
 
 ```{r real-case}
 library(XCNV)
-
 example <- xcnv_real_example()
-example$clinvar[, c(
-  "clinvar_allele_id", "clinical_significance",
-  "grch38_chrom", "grch38_start1", "grch38_end1",
-  "grch37_chrom", "grch37_start0", "grch37_end0"
-)]
+example$clinvar[, c("clinvar_allele_id", "clinical_significance",
+                    "grch37_chrom", "grch37_start0", "grch37_end0")]
 ```
 
-ClinVar publishes this record in both assemblies. X-CNV uses its GRCh37
-half-open interval. GRCh38 calls can be lifted inside XCNV through an explicit
-declaration, shown below.
-
-The following call evaluates all five X-CNV annotation families and the bundled
-published model:
+### X-CNV score
 
 ```{r real-prediction}
 prediction <- predict_cnv(example$cnv, example$resources)
-prediction[, c(
-  "Chr", "Start", "End", "Type",
-  "CDTS_1st", "CDTS_5th",
-  "gain.freq", "loss.freq",
-  "pLI", "Episcore", "GHIS", "MVP_score"
-)]
+prediction[, c("Chr", "Start", "End", "Type", "gain.freq", "loss.freq",
+               "pLI", "Episcore", "GHIS", "MVP_score")]
 ```
 
-`MVP_score` is the X-CNV model output; XCNV does not relabel it as an ACMG
-criterion or clinical class. This published compatibility lane is calibrated
-for GRCh37/hg19. A GRCh38 resource declaration is explicitly unsupported until
-a separately validated GRCh38 model exists.
+### ACMG/ClinGen evidence and class
 
-GRCh38 calls are scored only through an explicit liftover declaration. The
-caller stages a chain and both FASTA references; XCNV lifts each call with the
-DuckHTS `bcftools_liftover()` function and scores the lifted GRCh37 interval:
-
-```r
-liftover <- xcnv_liftover(
-  chain = "/path/to/hg38ToHg19.over.chain",
-  source_fasta = "/path/to/GRCh38.fa",
-  destination_fasta = "/path/to/GRCh37.fa",
-  source_assembly = "GRCh38", destination_assembly = "GRCh37",
-  release = "ucsc-hg38ToHg19"
-)
-grch38 <- data.frame(chr = "3", start = 181710886L, end = 181748657L, type = "loss")
-prediction <- predict_cnv(grch38, example$resources, liftover = liftover)
-prediction[, c(
-  "Chr", "Start", "End", "assembly", "lifted_chr", "lifted_start",
-  "lifted_end", "liftover_length_ratio", "liftover_reason", "status",
-  "MVP_score"
-)]
-```
-
-Each row keeps its GRCh38 coordinates and adds the lifted GRCh37 interval and
-the chain release. A call that does not lift to one interval on the same contig
-and strand is `unsupported`, names its `liftover_reason`, and has no
-`MVP_score`.
-
-## Inspectable ACMG/ClinGen evidence
-
-The same real deletion completely contains the GENCODE v19 `SOX2` gene and its
-ClinGen haploinsufficiency record. The automatic provider derives only the
-objective content criteria it can establish from those relations:
+The deletion contains `SOX2`, an established haploinsufficient gene, so
+criterion 2A gives one point.
 
 ```{r real-evidence}
-cnv <- transform(
-  example$cnv,
-  cnv_id = example$clinvar$cnv_id,
-  cnv_type = type
-)
-cnv$assembly <- "GRCh37"
+cnv <- transform(example$cnv, cnv_id = example$clinvar$cnv_id,
+                 cnv_type = type, assembly = "GRCh37")
 genes <- transform(example$genes, assembly = "GRCh37")
 dosage <- transform(example$dosage, assembly = "GRCh37")
 evidence <- derive_cnv_2019_evidence(cnv, genes, dosage)
-evidence[, c(
-  "criterion", "score", "source_id",
-  "source_release", "evidence_id"
-)]
+evidence[, c("criterion", "score", "source_id", "evidence_id")]
+score_cnv_2019(evidence)[, c("cnv_id", "cnv_type", "score", "classification", "status")]
 ```
 
-The rows can be scored directly:
+The automatic provider derives sections 1, 2A and 3 from gene and dosage
+tables. Phenotype, inheritance, segregation, population, case and partial-gene
+evidence are extra rows that you supply.
 
-```{r real-classification}
-score_cnv_2019(evidence)
-```
+## GRCh38 calls
 
-Classification status is evaluated independently for each `(cnv_id, cnv_type)`.
-Only `supported` rows receive a clinical class; unspecified, unsupported, or
-conflicting assembly/status contracts return `NA` while retaining linked
-evidence counts and provider/source identities. A missing `policy_id` defaults
-to `acmg-clingen-2019-constitutional-cnv`; if supplied, it must be that exact,
-nonempty value on every evidence row. Foreign or mixed policies fail before a
-summary or classification is emitted. Evidence provider identity remains
-provenance and is neither voted nor rewritten. A scalar evidence `model_id` is
-based only on selected rows that contribute to the group or CNV/type score; it
-is emitted only when every such row has the same nonmissing model, so an
-unselected row cannot supply attribution. Conflicting nonmissing selected models
-for one CNV/type are rejected. Required evidence identifiers, provenance, and
-supplied contract labels must be non-missing, nonempty character/factor labels;
-logical, numeric, list, and matrix values are rejected rather than stringified.
-Releases are not collapsed into a misleading scalar when multiple releases
-contribute.
-
-Here criterion 2A supplies one point because the deletion completely contains
-an established haploinsufficient gene. The three relations declare one coherent
-assembly, and the output carries the ACMG/ClinGen policy identity separately
-from any X-CNV model output. They must also use nonnegative integer BED
-coordinates in the exactly representable range `[0, 2^53)` with `start < end`
-and nonempty character/factor contigs without surrounding whitespace; coordinate
-strings are checked before conversion. Native matching uses exact
-caller/provider contig names: XCNV does not infer aliases, and a valid CNV
-contig with no matching gene or dosage resource is a no-overlap result rather
-than an error. A zero-row CNV relation is neutral, but nonempty CNVs require
-nonempty provenance-labelled gene and dosage relations, so absent resources
-never fabricate negative evidence. The `functional_biotypes` vocabulary must be explicit, nonempty,
-unique character/factor labels; gene `biotype` values must be explicit and
-nonempty. Both reject surrounding whitespace or placeholder tokens before
-filtering.
-Legitimate explicit nonfunctional Ensembl-style biotypes remain valid;
-incomplete annotation cannot fabricate 1B/3A absence evidence.
-The automatic provider does not invent phenotype,
-inheritance, segregation, population, case-report, or partial-gene evidence.
-Those require explicit additional evidence rows. DECIPHER may be used as an
-optional permitted source when the user has the required access and case-level
-controls; XCNV neither downloads nor bundles DECIPHER data and never infers
-protected case evidence.
-
-## Published model without XGBoost
-
-The published classifier is one tree with 41 nodes. XCNV stores the tree as a
-small, validated tabular object and evaluates it directly:
-
-```{r model}
-model <- xcnv_bundled_model()
-data.frame(
-  trees = length(unique(model$nodes$tree_id)),
-  nodes = nrow(model$nodes),
-  features = length(model$feature_names)
-)
-
-model_data <- new.env(parent = emptyenv())
-data("xcnv_portable_model", package = "XCNV", envir = model_data)
-identical(model_data$xcnv_portable_model, model)
-```
-
-`tools/stage_xcnv_model.R` rebuilds this portable form from the original
-serialized booster and compares both evaluators on 1,024 deterministic feature
-rows. XGBoost is needed for that maintainer-only conversion, not for package
-installation or prediction.
-
-## Full annotation resources
-
-The bundled real example is deliberately valid only for ClinVar allele 72461.
-A general run uses a full GRCh37 resource directory:
+The X-CNV model and its resources are GRCh37. Declare a liftover to score
+GRCh38 calls. XCNV lifts each call with DuckHTS and scores the GRCh37 interval:
 
 ```r
-resources <- xcnv_resources("/path/to/xcnv-resources", require = "annotations")
-cnvs <- read_cnv("input.bed")
-predictions <- predict_cnv(cnvs, resources)
+liftover <- xcnv_liftover(
+  chain = "hg38ToHg19.over.chain",
+  source_fasta = "GRCh38.fa", destination_fasta = "GRCh37.fa",
+  source_assembly = "GRCh38", destination_assembly = "GRCh37",
+  release = "ucsc-hg38ToHg19"
+)
+predict_cnv(grch38_calls, resources, liftover = liftover)
+```
+
+Each row keeps its GRCh38 coordinates and adds the lifted interval. A call that
+does not lift to one interval on the same contig and strand is `unsupported`,
+with a `liftover_reason` and no `MVP_score`. The ACMG/ClinGen lane works on
+GRCh38 directly.
+
+## Resources
+
+The resources are on Hugging Face at
+[`RgenomicsETL/xcnv-resources`](https://huggingface.co/datasets/RgenomicsETL/xcnv-resources).
+`SHA256SUMS` covers every file.
+
+| Folder | Contents | Used by |
+|---|---|---|
+| `grch37/` | X-CNV annotations and model | X-CNV lane |
+| `grch38/` | GENCODE 50 genes and ClinGen dosage as Parquet, with `sources.tsv` | ACMG/ClinGen lane |
+
+Score calls with the X-CNV lane:
+
+```r
+resources <- xcnv_resources("xcnv-resources/grch37", require = "annotations")
+predictions <- predict_cnv(read_cnv("input.bed"), resources)
 write_xcnv(predictions, "predictions.output.csv")
 ```
 
-`xcnv_resource_manifest()` lists the required files. `run_xcnv()` provides the
-same workflow as one call and writes only when an output path is supplied. The
-current ownership and relational boundary is [`ARCHITECTURE.md`](ARCHITECTURE.md).
+`xcnv_resource_manifest()` lists the required files. `run_xcnv()` does the
+same in one call.
 
-The compatibility contract, coordinate conventions, and current gaps are in
-[`docs/upstream-compatibility.md`](https://github.com/RGenomicsETL/XCNV/blob/main/docs/upstream-compatibility.md).
+Derive ACMG/ClinGen evidence for GRCh38 calls:
+
+```r
+con <- DBI::dbConnect(duckdb::duckdb())
+genes <- DBI::dbGetQuery(con, "FROM 'xcnv-resources/grch38/genes.parquet'")
+dosage <- DBI::dbGetQuery(con, "FROM 'xcnv-resources/grch38/dosage.parquet'")
+calls <- data.frame(
+  cnv_id = "sox2-del", chr = "chr3", start = 181700000, end = 181800000,
+  cnv_type = "loss", assembly = "GRCh38"
+)
+evidence <- derive_cnv_2019_evidence(calls, genes, dosage)
+score_cnv_2019(evidence)
+```
+
+On these relations the call above scores 1 point (2A, `SOX2`): pathogenic.
+
+`tools/build_grch38_resources.R` rebuilds `grch38/` from SHA-256-pinned
+sources.
+
+## The model
+
+The published classifier is one tree with 41 nodes. XCNV stores it as a small
+table and evaluates it in R. `tools/stage_xcnv_model.R` rebuilds this table from
+the original XGBoost booster and checks both evaluators on 1,024 rows; only that
+maintainer step needs XGBoost.
 
 ## Citation
 
-Please cite Zhang et al. (2021), *Genome Medicine* 13:132,
+Zhang et al. (2021), *Genome Medicine* 13:132,
 [doi:10.1186/s13073-021-00945-4](https://doi.org/10.1186/s13073-021-00945-4).
