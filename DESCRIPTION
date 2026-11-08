@@ -27,7 +27,7 @@ Imports:
     data.table,
     DBI,
     duckdb,
-    Rduckhts (>= 2.0.2)
+    Rduckhts (>= 2.0.1)
 Suggests:
     roxygen2,
     tinytest,
