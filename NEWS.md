@@ -7,6 +7,8 @@
   the Ensembl chain by SHA-256 and copies it to `liftover/`, and the Hugging
   Face dataset carries it there. A test shows that a chain without `chr`
   names, gzip-compressed, lifts calls on a `chr`-named FASTA to the same rows.
+  The README records the calls the chain leaves unsupported because it maps
+  some regions to GRCh37 patch contigs.
 
 * Added `tools/build_grch38_resources.R`, which builds the GRCh38 gene
   (GENCODE 50) and ClinGen dosage relations of the ACMG/ClinGen 2019 lane as
