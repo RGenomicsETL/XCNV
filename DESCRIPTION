@@ -26,7 +26,8 @@ Depends: R (>= 4.1.0)
 Imports:
     data.table,
     DBI,
-    duckdb
+    duckdb,
+    Rduckhts (>= 2.0.2)
 Suggests:
     roxygen2,
     tinytest,
@@ -34,7 +35,7 @@ Suggests:
     rmarkdown
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 8.0.0
 LazyData: true
 LazyDataCompression: xz
 Config/Needs/website: pkgdown
+Config/roxygen2/version: 8.1.1

@@ -52,17 +52,19 @@ write_xcnv <- function(x, output) {
 #' @param output `NULL` to return results without writing, or one explicit CSV
 #'   path.
 #' @param overlap_backend Passed to `annotate_cnv()`.
+#' @param liftover `NULL`, or an `xcnv_liftover()` declaration passed to
+#'   `predict_cnv()`.
 #' @return A prediction data frame; the same object is returned invisibly when
 #'   `output` is non-`NULL`.
 #' @export
 run_xcnv <- function(
   input, resources, model = NULL, output = NULL,
-  overlap_backend = c("duckdb", "reference")
+  overlap_backend = c("duckdb", "reference"), liftover = NULL
 ) {
   overlap_backend <- match.arg(overlap_backend)
   result <- predict_cnv(
     input, resources = resources, model = model,
-    overlap_backend = overlap_backend
+    overlap_backend = overlap_backend, liftover = liftover
   )
   if (!is.null(output)) write_xcnv(result, output)
   result

@@ -59,9 +59,8 @@ example$clinvar[, c(
 ```
 
 ClinVar publishes this record in both assemblies. X-CNV uses its GRCh37
-half-open interval. When a source provides only one assembly, lift it during
-resource staging—for example with Rduckhts' `rduckhts_liftover()`—and retain
-the source and destination coordinates beside the case.
+half-open interval. GRCh38 calls can be lifted inside XCNV through an explicit
+declaration, shown below.
 
 The following call evaluates all five X-CNV annotation families and the bundled
 published model:
@@ -79,8 +78,33 @@ prediction[, c(
 `MVP_score` is the X-CNV model output; XCNV does not relabel it as an ACMG
 criterion or clinical class. This published compatibility lane is calibrated
 for GRCh37/hg19. A GRCh38 resource declaration is explicitly unsupported until
-a separately validated GRCh38 model exists; XCNV never silently lifts and
-relabels the result.
+a separately validated GRCh38 model exists.
+
+GRCh38 calls are scored only through an explicit liftover declaration. The
+caller stages a chain and both FASTA references; XCNV lifts each call with the
+DuckHTS `bcftools_liftover()` function and scores the lifted GRCh37 interval:
+
+```r
+liftover <- xcnv_liftover(
+  chain = "/path/to/hg38ToHg19.over.chain",
+  source_fasta = "/path/to/GRCh38.fa",
+  destination_fasta = "/path/to/GRCh37.fa",
+  source_assembly = "GRCh38", destination_assembly = "GRCh37",
+  release = "ucsc-hg38ToHg19"
+)
+grch38 <- data.frame(chr = "3", start = 181710886L, end = 181748657L, type = "loss")
+prediction <- predict_cnv(grch38, example$resources, liftover = liftover)
+prediction[, c(
+  "Chr", "Start", "End", "assembly", "lifted_chr", "lifted_start",
+  "lifted_end", "liftover_length_ratio", "liftover_reason", "status",
+  "MVP_score"
+)]
+```
+
+Each row keeps its GRCh38 coordinates and adds the lifted GRCh37 interval and
+the chain release. A call that does not lift to one interval on the same contig
+and strand is `unsupported`, names its `liftover_reason`, and has no
+`MVP_score`.
 
 ## Inspectable ACMG/ClinGen evidence
 

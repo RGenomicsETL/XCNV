@@ -1,5 +1,15 @@
 # XCNV 0.0.0.9000
 
+* Added GRCh38 input to the X-CNV model lane through an explicit
+  `xcnv_liftover()` declaration of a staged chain, both FASTA references, their
+  assemblies, and the chain release. `predict_cnv()` and `run_xcnv()` lift each
+  call with DuckHTS `bcftools_liftover()` as a symbolic `<DEL>`/`<DUP>` record
+  and score the lifted GRCh37 interval. Rows keep their input coordinates and
+  add the lifted interval, chain identity and release, length ratio, and a
+  `liftover_reason`; calls that do not lift cleanly are `unsupported` with no
+  `MVP_score`. Without a declaration GRCh38 input is still refused. Rduckhts is
+  now imported.
+
 * Selected DuckDB's explicit non-shared home mode when supported, keeping
   internal overlap connections silent and README rendering deterministic across
   DuckDB releases.

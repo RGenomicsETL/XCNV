@@ -10,7 +10,8 @@ run_xcnv(
   resources,
   model = NULL,
   output = NULL,
-  overlap_backend = c("duckdb", "reference")
+  overlap_backend = c("duckdb", "reference"),
+  liftover = NULL
 )
 
 xcnv(
@@ -18,7 +19,8 @@ xcnv(
   resources,
   model = NULL,
   output = NULL,
-  overlap_backend = c("duckdb", "reference")
+  overlap_backend = c("duckdb", "reference"),
+  liftover = NULL
 )
 }
 \arguments{
@@ -33,6 +35,9 @@ override when present and otherwise the bundled published model.}
 path.}
 
 \item{overlap_backend}{Passed to \code{annotate_cnv()}.}
+
+\item{liftover}{\code{NULL}, or an \code{xcnv_liftover()} declaration passed to
+\code{predict_cnv()}.}
 }
 \value{
 A prediction data frame; the same object is returned invisibly when

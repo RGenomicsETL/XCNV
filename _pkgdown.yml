@@ -32,6 +32,7 @@ reference:
       - load_xcnv_model
       - xcnv_portable_model
       - xcnv_resources
+      - xcnv_liftover
       - validate_xcnv_resources
       - xcnv_resource_manifest
       - xcnv_fixture_resources

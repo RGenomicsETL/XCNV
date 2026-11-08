@@ -209,17 +209,36 @@ xcnv_bundled_model <- function() {
 #' evaluates a staged `xcnv-tree-v1` artifact in ordinary R. Installing and
 #' running the package does not require XGBoost.
 #'
+#' The published model is calibrated on GRCh37 resources. CNV calls on another
+#' assembly are scored only through an explicit `liftover` declaration whose
+#' destination assembly matches the resources. Then every row keeps its input
+#' coordinates in `Chr`, `Start`, and `End`, and the annotation features and
+#' `MVP_score` are computed on the lifted interval. A call that does not lift
+#' to one interval on the same contig and strand is `unsupported`, names its
+#' `liftover_reason`, and has missing features and no `MVP_score`.
+#'
 #' @param x A path, data frame, or matrix containing CNV records.
 #' @param resources An `xcnv_resources` object or an explicit resource directory.
 #' @param model A model object/path. If `NULL`, a model in `resources` is used
 #'   when present, otherwise the bundled published model is used.
 #' @param overlap_backend Passed to `annotate_cnv()`.
+#' @param liftover `NULL` when `x` is on the resource assembly, or an
+#'   `xcnv_liftover()` declaration from the assembly of `x` to the resource
+#'   assembly.
 #' @return A data frame containing the legacy annotation columns, a final
 #'   `MVP_score` model column, and contract columns for provider, assembly,
-#'   resource release, model identity, policy identity, and status.
+#'   resource release, model identity, policy identity, and status. `assembly`
+#'   is the assembly of `Chr`, `Start`, and `End`. With `liftover`, the columns
+#'   `lifted_assembly`, `lifted_chr`, `lifted_start`, `lifted_end` (BED
+#'   half-open), `liftover_chain`, `liftover_release`, `liftover_length_ratio`
+#'   (lifted over input BED width), and `liftover_reason` (one of
+#'   `source_contig_absent`, `start_unmapped`, `end_unmapped`,
+#'   `end_before_start`, `contig_changed`, `strand_reversed`, or `NA` for a
+#'   supported row) precede `MVP_score`.
 #' @export
 predict_cnv <- function(
-  x, resources, model = NULL, overlap_backend = c("duckdb", "reference")
+  x, resources, model = NULL, overlap_backend = c("duckdb", "reference"),
+  liftover = NULL
 ) {
   overlap_backend <- match.arg(overlap_backend)
   resources <- if (inherits(resources, "xcnv_resources")) {
@@ -227,6 +246,8 @@ predict_cnv <- function(
   } else {
     xcnv_resources(resources, require = "annotations")
   }
+  .xcnv_require_supported(resources)
+  if (!is.null(liftover)) .xcnv_check_liftover(liftover, resources)
   if (is.null(model)) {
     model_path <- resources$files$model
     model <- if (!is.null(model_path) && !is.na(model_path)) {
@@ -236,32 +257,47 @@ predict_cnv <- function(
     }
   }
   model <- if (is.character(model)) load_xcnv_model(model) else model
-  features <- annotate_cnv(x, resources, overlap_backend = overlap_backend)
-  matrix <- .feature_matrix(features, model)
-  if (inherits(model, "xcnv_portable_model")) {
-    score <- .predict_portable_tree(model, matrix)
-  } else {
+  if (!inherits(model, "xcnv_portable_model")) {
     stop("model must be a validated xcnv-tree-v1 portable model", call. = FALSE)
   }
-  score <- as.numeric(score)
-  if (length(score) != nrow(features)) {
-    stop("model returned one score per CNV is required", call. = FALSE)
+  context <- .new_overlap_context(overlap_backend, duckhts = !is.null(liftover))
+  on.exit(.close_overlap_context(context), add = TRUE)
+  if (is.null(liftover)) {
+    features <- .annotate_cnv_with(x, resources, context)
+    assembly <- resources$assembly
+    status <- rep.int(resources$status, nrow(features))
+    lift <- NULL
+  } else {
+    lift <- .xcnv_lift_cnv(.prepare_input_order(read_cnv(x)), liftover, context$con)
+    features <- .xcnv_lifted_features(lift, resources, context)
+    assembly <- liftover$source_assembly
+    status <- lift$status
   }
+  scored <- status == "supported"
+  score <- rep.int(NA_real_, nrow(features))
+  score[scored] <- as.numeric(
+    .predict_portable_tree(model, .feature_matrix(features[scored, , drop = FALSE], model))
+  )
   model_id <- .xcnv_model_id
   if (!is.null(model$metadata) && "source_kind" %in% names(model$metadata) &&
       identical(model$metadata[["source_kind"]], "synthetic-test-only")) {
     model_id <- "synthetic-test-only"
   }
   contract <- data.frame(
-    provider_id = resources$provider_id,
-    assembly = resources$assembly,
-    resource_release = resources$resource_release,
-    model_id = model_id,
-    policy_id = NA_character_,
-    status = resources$status,
+    provider_id = rep.int(resources$provider_id, nrow(features)),
+    assembly = rep.int(assembly, nrow(features)),
+    resource_release = rep.int(resources$resource_release, nrow(features)),
+    model_id = rep.int(model_id, nrow(features)),
+    policy_id = rep.int(NA_character_, nrow(features)),
+    status = status,
     stringsAsFactors = FALSE
   )
-  contract <- contract[rep.int(1L, nrow(features)), , drop = FALSE]
-  rownames(contract) <- NULL
+  if (!is.null(lift)) {
+    contract <- cbind(contract, lift[, c(
+      "lifted_assembly", "lifted_chr", "lifted_start", "lifted_end",
+      "liftover_chain", "liftover_release", "liftover_length_ratio",
+      "liftover_reason"
+    )])
+  }
   cbind(features, contract, MVP_score = score)
 }
