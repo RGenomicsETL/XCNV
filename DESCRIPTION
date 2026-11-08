@@ -22,7 +22,7 @@ Description: Provides bedtools-free copy-number-variant annotation, a portable e
 License: GPL (>= 2)
 URL: https://rgenomicsetl.github.io/XCNV/, https://github.com/RGenomicsETL/XCNV, https://github.com/kbvstmd/XCNV
 BugReports: https://github.com/RGenomicsETL/XCNV/issues
-Depends: R (>= 4.1.0)
+Depends: R (>= 4.4.0)
 Imports:
     data.table,
     DBI,
