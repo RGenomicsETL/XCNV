@@ -35,8 +35,8 @@
 #' affected base, which equals the BED `end`. A lifted record with position `p`
 #' and `END` `e` is returned as the BED interval `[p - 1, e)`.
 #'
-#' @param chain UCSC chain file from `source_assembly` to
-#'   `destination_assembly`.
+#' @param chain Chain file, in the UCSC chain format, from `source_assembly`
+#'   to `destination_assembly`; plain or gzip-compressed.
 #' @param source_fasta FASTA reference of `source_assembly`.
 #' @param destination_fasta FASTA reference of `destination_assembly`.
 #' @param source_assembly Assembly of the CNV calls, for example `"GRCh38"`.

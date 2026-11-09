@@ -87,13 +87,28 @@ GRCh37 interval:
 
 ``` r
 liftover <- xcnv_liftover(
-  chain = "hg38ToHg19.over.chain",
+  chain = "xcnv-resources/liftover/GRCh38_to_GRCh37.chain.gz",
   source_fasta = "GRCh38.fa", destination_fasta = "GRCh37.fa",
   source_assembly = "GRCh38", destination_assembly = "GRCh37",
-  release = "ucsc-hg38ToHg19"
+  release = "ensembl-76-GRCh38_to_GRCh37"
 )
 predict_cnv(grch38_calls, resources, liftover = liftover)
 ```
+
+The chain is Ensembl’s GRCh38 to GRCh37 assembly mapping, which Ensembl
+publishes without restriction on use. DuckHTS reads it compressed and
+matches contigs with or without `chr`, so it lifts calls on a
+`chr1`-named GRCh38 FASTA to a `1`-named GRCh37 FASTA as published.
+
+The chain also maps GRCh38 regions to GRCh37 patch contigs
+(`HG1423_PATCH` and others), which a primary GRCh37 FASTA such as
+`human_g1k_v37` lacks. DuckHTS follows the chain and does not check the
+destination contig against the destination FASTA. A call with an end in
+such a region is `unsupported`, with `contig_changed` or `end_unmapped`.
+On 3,735 ClinVar copy-number records with both GRCh38 and GRCh37
+coordinates, lifted from the GIAB GRCh38 FASTA to `human_g1k_v37`, the
+chain lifts 3,458 calls (92.6%); the same chain without its patch-contig
+chains lifts 3,568 (95.5%) and changes no lifted interval.
 
 Each row keeps its GRCh38 coordinates and adds the lifted interval. A
 call that does not lift to one interval on the same contig and strand is
@@ -110,6 +125,7 @@ The resources are on Hugging Face at
 |----|----|----|
 | `grch37/` | X-CNV annotations and model | X-CNV lane |
 | `grch38/` | GENCODE 50 genes and ClinGen dosage as Parquet, with `sources.tsv` | ACMG/ClinGen lane |
+| `liftover/` | Ensembl GRCh38 to GRCh37 chain | X-CNV lane on GRCh38 calls |
 
 Score calls with the X-CNV lane:
 

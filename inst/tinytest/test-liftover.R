@@ -163,6 +163,23 @@ expect_true(all(is.na(lifted$pLI[3:5])))
 expect_identical(names(lifted)[length(names(lifted))], "MVP_score")
 expect_true(all(lifted$resource_release == direct$resource_release[[1L]]))
 
+# Ensembl chains name contigs without `chr` (`1`); a chr-prefixed GRCh38 FASTA
+# (`chr1`) and a gzip-compressed chain lift the same calls to the same rows.
+gzipped <- file.path(staged, "test.chain.gz")
+writeLines(readLines(chain), gz <- gzfile(gzipped, "w"))
+close(gz)
+prefixed <- xcnv_liftover(
+  chain = gzipped,
+  source_fasta = fasta(file.path(staged, "source-chr.fa"), c("chr1", "chr2", "chr3"), c(2000, 1000, 1000)),
+  destination_fasta = liftover$destination_fasta,
+  source_assembly = "GRCh38", destination_assembly = "GRCh37",
+  release = "test-chain-1"
+)
+prefixed_rows <- predict_cnv(grch38, fixture, liftover = prefixed)
+expect_identical(prefixed_rows$liftover_chain, rep("test.chain.gz", 5L))
+prefixed_rows$liftover_chain <- lifted$liftover_chain
+expect_equal(prefixed_rows, lifted)
+
 # The reference overlap backend gives the same lifted result.
 expect_equal(
   predict_cnv(grch38, fixture, overlap_backend = "reference", liftover = liftover),
