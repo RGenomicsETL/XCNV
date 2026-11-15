@@ -402,3 +402,129 @@ bad$criterion <- "not-a-criterion"
 expect_error(score_cnv_2019(bad))
 bad <- evidence[1, setdiff(names(evidence), "source_release"), drop = FALSE]
 expect_error(score_cnv_2019(bad))
+
+# Criterion 4O reads a population relation of records of one type with the
+# frequency that may support it (Riggs et al. 2020, Supplemental Material 1).
+population_genes <- data.frame(
+  chr = c("chr1", "chr1", "chr2", "chr3"), start = c(1000L, 5000L, 1000L, 1000L),
+  end = c(2000L, 6000L, 2000L, 2000L), gene_id = c("G1", "G2", "G3", "G4"),
+  biotype = "protein_coding", source_id = "gencode", source_release = "50",
+  assembly = "GRCh38"
+)
+population_dosage <- data.frame(
+  chr = c("chr2", "chr3"), start = 1000L, end = 2000L,
+  record_id = c("AR30", "HI3"), hi_score = c(30, 3), ts_score = c(0, 0),
+  source_id = "clingen_dosage", source_release = "2026-11-08", assembly = "GRCh38"
+)
+population <- data.frame(
+  chr = c("chr1", "chr1", "chr1", "chr1", "chr1", "chr1", "chr1", "chr2", "chr3", "chr3"),
+  start = c(950L, 900L, 5000L, 5200L, 2900L, 6900L, 7900L, 800L, 800L, 800L),
+  end = c(2050L, 2100L, 6000L, 5800L, 3600L, 7200L, 8200L, 2200L, 2200L, 2200L),
+  record_id = paste0("P", 1:10),
+  cnv_type = c("loss", "loss", "gain", "loss", "loss", "loss", "loss", "loss", "loss", "gain"),
+  frequency = c(0.05, 0.004, 0.005, 0.2, 0.02, 0.001, 0.995, 0.03, 0.03, 0.03),
+  source_id = "gnomad_sv", source_release = "4.1", assembly = "GRCh38"
+)
+population_cnvs <- data.frame(
+  cnv_id = c(
+    "common", "frequent", "other_type", "uncovered_gene", "gene_free",
+    "gene_free_larger", "rare", "artifact", "recessive", "established", "established_gain"
+  ),
+  chr = c("chr1", "chr1", "chr1", "chr1", "chr1", "chr1", "chr1", "chr1", "chr2", "chr3", "chr3"),
+  start = c(900L, 4900L, 950L, 4000L, 3000L, 3000L, 7000L, 8000L, 900L, 900L, 900L),
+  end = c(2100L, 6100L, 1500L, 5500L, 3500L, 4000L, 7100L, 8100L, 2100L, 2100L, 2100L),
+  cnv_type = c(
+    "loss", "gain", "gain", "loss", "loss", "loss", "loss", "loss", "loss", "loss", "gain"
+  ),
+  assembly = "GRCh38"
+)
+population_evidence <- derive_cnv_2019_evidence(
+  population_cnvs, population_genes, population_dosage, population
+)
+criterion_4o <- population_evidence[population_evidence$criterion == "4O", , drop = FALSE]
+rownames(criterion_4o) <- criterion_4o$cnv_id
+# The record with the highest frequency gives the one row; the CNV's
+# intergenic flanks need not be covered.
+expect_equal(criterion_4o["common", "score"], -1)
+expect_equal(criterion_4o["common", "evidence_id"], "population:P1:0.05")
+# Below 1 % and above 0.1 % the record gives -0.90.
+expect_equal(criterion_4o["frequent", "score"], -0.90)
+# A CNV without a functional gene must lie inside the record.
+expect_equal(criterion_4o["gene_free", "score"], -1)
+expect_true(all(criterion_4o[c("common", "frequent", "gene_free"), "selected"]))
+# Another type, an uncovered gene part, a larger gene-free CNV, a record at
+# 0.1 % and an established HI loss give no 4O row.
+expect_false(any(
+  c("other_type", "uncovered_gene", "gene_free_larger", "rare", "established") %in%
+    criterion_4o$cnv_id
+))
+# A record above 99 %, and a loss over an autosomal recessive gene, are shown
+# but not selected.
+expect_false(any(criterion_4o[c("artifact", "recessive"), "selected"]))
+expect_equal(criterion_4o["artifact", "evidence_id"], "population:P7:0.995")
+# Table 2 has no skip of section 4 for a gain over an established HI record.
+expect_equal(criterion_4o["established_gain", "score"], -1)
+expect_true(all(criterion_4o$model_id == "4o-af0.01-0.001-gene-content"))
+expect_true(all(criterion_4o$source_id == "gnomad_sv"))
+expect_true(all(criterion_4o$source_release == "4.1"))
+
+population_summary <- score_cnv_2019(population_evidence)
+rownames(population_summary) <- population_summary$cnv_id
+expect_equal(population_summary["common", "classification"], "benign")
+expect_equal(population_summary["frequent", "classification"], "likely_benign")
+expect_equal(population_summary["gene_free", "score"], -1.60)
+expect_equal(population_summary["gene_free", "classification"], "benign")
+expect_equal(population_summary["recessive", "classification"], "uncertain_significance")
+expect_equal(population_summary["artifact", "score"], -0.60)
+population_groups <- score_cnv_2019(population_evidence, detail = "groups")
+expect_equal(
+  population_groups$model_id[population_groups$cnv_id == "common" & population_groups$cap_group == "4O"],
+  "4o-af0.01-0.001-gene-content"
+)
+
+# Without a population relation no 4O row is derived; the other rows are the same.
+without_population <- derive_cnv_2019_evidence(
+  population_cnvs, population_genes, population_dosage
+)
+expect_false("4O" %in% without_population$criterion)
+other_criteria <- population_evidence[population_evidence$criterion != "4O", , drop = FALSE]
+rownames(other_criteria) <- NULL
+rownames(without_population) <- NULL
+expect_identical(without_population, other_criteria)
+
+# A given population relation is checked like the other relations, and an
+# empty one is never absence evidence.
+expect_error(derive_cnv_2019_evidence(
+  population_cnvs, population_genes, population_dosage, population[FALSE, , drop = FALSE]
+))
+expect_equal(nrow(derive_cnv_2019_evidence(
+  population_cnvs[FALSE, , drop = FALSE], population_genes, population_dosage,
+  population[FALSE, , drop = FALSE]
+)), 0L)
+for (column in c("record_id", "cnv_type", "frequency", "source_release")) {
+  expect_error(derive_cnv_2019_evidence(
+    population_cnvs, population_genes, population_dosage,
+    population[, setdiff(names(population), column)]
+  ))
+}
+for (frequency in list(1.5, -0.1, NA_real_, "nonsense")) {
+  bad_frequency <- population
+  bad_frequency$frequency[[1L]] <- frequency
+  expect_error(derive_cnv_2019_evidence(
+    population_cnvs, population_genes, population_dosage, bad_frequency
+  ))
+}
+bad_type <- population
+bad_type$cnv_type[[1L]] <- "DEL"
+expect_error(derive_cnv_2019_evidence(
+  population_cnvs, population_genes, population_dosage, bad_type
+))
+mixed_population_release <- population
+mixed_population_release$source_release[[1L]] <- "4.0"
+expect_error(derive_cnv_2019_evidence(
+  population_cnvs, population_genes, population_dosage, mixed_population_release
+))
+population_on_grch37 <- transform(population, assembly = "GRCh37")
+expect_error(derive_cnv_2019_evidence(
+  population_cnvs, population_genes, population_dosage, population_on_grch37
+))

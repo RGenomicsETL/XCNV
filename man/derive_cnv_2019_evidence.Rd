@@ -8,6 +8,7 @@ derive_cnv_2019_evidence(
   cnvs,
   genes,
   dosage,
+  population = NULL,
   functional_biotypes = "protein_coding",
   established_score = 3
 )
@@ -34,6 +35,13 @@ character/factor \code{chr} without surrounding whitespace, exactly representabl
 nonnegative integer \code{start} and \code{end} in \verb{[0, 2^53)} satisfying \code{start < end},
 plus \code{hi_score} and \code{ts_score}.}
 
+\item{population}{Optional population CNV relation, or \code{NULL}: one row per
+population record with BED \code{chr}, \code{start} and \code{end}, a nonempty
+\code{record_id}, \code{cnv_type} (\code{"loss"} or \code{"gain"}), the record's \code{frequency}
+in \verb{[0, 1]}, and one \code{source_id} and \code{source_release}. \code{frequency} is the
+frequency that may support 4O, such as the highest allele frequency of
+the genetic-ancestry groups that the source counts as eligible.}
+
 \item{functional_biotypes}{Nonempty, unique character/factor biotype labels
 counted as functionally important for sections 1 and 3; surrounding
 whitespace and placeholder tokens are rejected. Defaults to
@@ -47,11 +55,27 @@ A provenance-complete evidence data frame accepted by
 \code{score_cnv_2019()}.
 }
 \description{
-Derive only the criteria determined mechanically by gene content and
-established ClinGen dosage records: section 1 content, section 2A complete
-dosage-feature containment, and section 3 protein-coding gene count. Case,
-phenotype, segregation, population, partial-gene, and inheritance evidence
-are intentionally not inferred. Each input is a BED half-open relation with
+Derive only the criteria determined mechanically by gene content,
+established ClinGen dosage records and population frequency: section 1
+content, section 2A complete dosage-feature containment, section 3
+protein-coding gene count and, when a population relation is given,
+criterion 4O (overlap with common population variation). Case, phenotype,
+segregation, partial-gene, and inheritance evidence are intentionally not
+inferred.
+}
+\details{
+4O follows Riggs et al. (2020), Supplemental Material 1. A population
+record of the CNV's type gives evidence when it contains the CNV's part of
+every functional gene that the CNV overlaps, or the whole CNV when it
+overlaps none. The record with the highest frequency gives one row: -1 at
+a frequency of 1 \% or more, -0.90 above 0.1 \%, and no row at 0.1 \% or less.
+A record above 99 \% (a possible reference artifact), and a loss that
+overlaps a ClinGen autosomal recessive gene (dosage score 30), give the row
+with \code{selected = FALSE}, for the curator. A loss that overlaps an
+established haploinsufficient record skips section 4 and gets no 4O row.
+4O rows carry \code{model_id} \code{"4o-af0.01-0.001-gene-content"}.
+
+Each input is a BED half-open relation with
 non-missing, nonempty character/factor contig labels without leading or
 trailing whitespace, and finite, nonnegative integer coordinates in the
 exactly representable range \verb{[0, 2^53)} satisfying \code{start < end}.
@@ -68,10 +92,11 @@ filtering; surrounding whitespace and case-insensitive placeholder tokens are
 rejected for both, while explicit nonfunctional Ensembl-style biotypes remain
 valid. Incomplete annotation cannot establish 1B or 3A absence evidence. An
 optional \code{assembly}
-column is accepted on all three relations; nonempty relations must declare one
+column is accepted on every relation; nonempty relations must declare one
 coherent value. GRCh37 and GRCh38 are recognized; other assemblies remain
 explicit as \code{unsupported} in the output contract. A zero-row CNV relation is
 neutral and returns typed empty evidence; nonempty CNVs require nonempty gene
-and dosage relations, so an empty resource is never interpreted as negative
-evidence.
+and dosage relations, and a nonempty population relation when one is given,
+so an empty resource is never interpreted as negative evidence. Without a
+population relation no 4O row is derived.
 }

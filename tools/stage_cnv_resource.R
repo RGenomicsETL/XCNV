@@ -16,7 +16,9 @@ output <- normalizePath(args[["output"]], winslash = "/", mustWork = FALSE)
 if (!dir.exists(dirname(output))) dir.create(dirname(output), recursive = TRUE)
 temporary <- tempfile("xcnv-resource-", tmpdir = dirname(output))
 # on.exit() does not run at the top level of an Rscript; remove the partial
-# download explicitly when the transfer or the checksum fails.
+# download explicitly when the transfer or the checksum fails. R's timeout
+# bounds the whole transfer (60 s by default), which a gigabyte source exceeds.
+options(timeout = max(3600, getOption("timeout")))
 tryCatch(
   utils::download.file(args[["url"]], temporary, mode = "wb", quiet = FALSE),
   error = function(condition) {
@@ -31,8 +33,11 @@ if (!identical(actual_sha256, tolower(args[["expected_sha256"]]))) {
   unlink(temporary)
   stop("SHA-256 mismatch: expected ", args[["expected_sha256"]], ", observed ", actual_sha256, call. = FALSE)
 }
-if (file.exists(output) && !unlink(output)) stop("cannot replace output: ", output, call. = FALSE)
-if (!file.rename(temporary, output)) stop("could not publish staged resource", call. = FALSE)
+# file.rename() replaces an existing output.
+if (!file.rename(temporary, output)) {
+  unlink(temporary)
+  stop("could not publish staged resource", call. = FALSE)
+}
 receipt <- data.frame(
   source_id = args[["source_id"]], release = args[["release"]],
   assembly = args[["assembly"]], source_url = args[["url"]],

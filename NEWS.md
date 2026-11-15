@@ -1,5 +1,21 @@
 # XCNV 0.0.0.9000
 
+* `derive_cnv_2019_evidence()` derives criterion 4O, overlap with common
+  population variation, from an optional `population` relation (one row per
+  population record with its type and frequency). A record of the CNV's type
+  that holds its gene content gives -1 at a frequency of 1 % or more and
+  -0.90 above 0.1 %, by the Riggs et al. (2020) supplement; a possible
+  reference artifact (above 99 %) and a loss over a ClinGen autosomal
+  recessive gene give an unselected row, and a loss over an established
+  haploinsufficient record skips section 4. The README states each rule with
+  its source. Without a population relation the evidence is unchanged.
+  `tools/build_grch38_population.R` builds the GRCh38 relation from the
+  gnomAD-SV 4.1 sites file pinned by SHA-256, with the frequency of the
+  continental groups with more than 2000 alleles. `tools/stage_cnv_resource.R`
+  allows an hour per download, since R's 60 s default stopped gigabyte
+  sources, and replaces a staged file again instead of stopping after it has
+  deleted it.
+
 * The documented GRCh38 to GRCh37 chain is now Ensembl's
   `GRCh38_to_GRCh37.chain.gz` (assembly mapping, release 76), which Ensembl
   publishes without restriction on use; the UCSC `hg38ToHg19` chain is
