@@ -94,4 +94,8 @@ has the required access and redistribution controls. XCNV does not download,
 bundle, or infer protected DECIPHER case evidence. Case, phenotype,
 segregation, inheritance, and similar evidence remain explicit provider rows;
 the automatic ACMG provider only derives the documented objective content
-subset.
+subset and, from a caller-supplied population relation, criterion 4O. A gain
+that overlaps only part of a functional gene requires manual evidence about
+breakpoints and transcripts and gets no automatic 4O row. Its 4O rows that
+need judgement (a possible reference artifact, a loss over an
+autosomal recessive gene) are unselected rows for the curator.

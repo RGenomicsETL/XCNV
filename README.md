@@ -76,8 +76,9 @@ score_cnv_2019(evidence)[, c("cnv_id", "cnv_type", "score", "classification", "s
 ```
 
 The automatic provider derives sections 1, 2A and 3 from gene and dosage
-tables. Phenotype, inheritance, segregation, population, case and
-partial-gene evidence are extra rows that you supply.
+tables, and criterion 4O from a population CNV table when you give one
+([criterion 4O](#criterion-4o)). Phenotype, inheritance, segregation,
+case and partial-gene evidence are extra rows that you supply.
 
 ## GRCh38 calls
 
@@ -156,7 +157,37 @@ On these relations the call above scores 1 point (2A, `SOX2`):
 pathogenic.
 
 `tools/build_grch38_resources.R` rebuilds `grch38/` from SHA-256-pinned
-sources.
+sources. `tools/build_grch38_population.R` builds the population
+relation of criterion 4O, `grch38/population.parquet`, from the
+gnomAD-SV 4.1 sites file (CC0 1.0), pinned by SHA-256.
+
+### Criterion 4O
+
+Criterion 4O is overlap with common population variation (Riggs et
+al. 2020, Supplemental Material 1, categories 4L to 4O).
+`derive_cnv_2019_evidence()` derives it from a `population` relation:
+one row per population record, with its type (`loss` or `gain`) and the
+`frequency` that may support 4O.
+
+| Rule | Source |
+|----|----|
+| The record has the CNV’s type | Supplement: a common gain does not make a loss benign, and the reverse |
+| The record holds the CNV’s gene content: it contains the CNV’s part of every functional gene that the CNV overlaps, or the whole CNV when it overlaps none | Supplement: the population CNV “includes the same gene content” |
+| A gain that overlaps only part of a functional gene: no automatic 4O row | Partial-gene gains require manual evidence about breakpoints and transcripts |
+| Frequency 1 % or more: -1 | Supplement: “common” is 1 % or more, default points |
+| Frequency above 0.1 % and below 1 %: -0.90 | Supplement: less weight below 1 %; main text: such a CNV is a likely benign example. 0.1 % is the supplement’s “relatively common” frequency (4N); -0.90 is the weight at which 4O alone is likely benign. This reading is XCNV’s |
+| Frequency 0.1 % or less: no row | as above |
+| Frequency above 99 %: row shown, not selected | Supplement: such a frequency can be a reference artifact |
+| A loss over a ClinGen autosomal recessive gene (dosage score 30): row shown, not selected | Supplement: carrier frequencies of recessive disease genes can exceed 1 % |
+| A loss over an established haploinsufficient record: no row | Table 1: skip section 4 after such an overlap |
+
+The record with the highest frequency gives the one row. Its
+`evidence_id` is `population:<record>:<frequency>` and its `model_id` is
+`4o-af0.01-0.001-gene-content`. The gnomAD-SV relation takes as
+`frequency` the highest allele frequency of the continental groups with
+more than 2000 alleles (afr, amr, eas, nfe, sas), the population rule of
+the ClinGen CNV FAQ, which applies the ClinGen SVI BA1 recommendation
+(Ghosh et al. 2018).
 
 ## The model
 

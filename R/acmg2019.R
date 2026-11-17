@@ -566,6 +566,58 @@ score_cnv_2019 <- function(evidence, detail = c("summary", "groups")) {
   x
 }
 
+# Criterion 4O, overlap with common population variation (Riggs et al. 2020,
+# Supplemental Material 1, categories 4L-4O). A population record of the
+# CNV's dosage direction at a frequency of 1 % or greater earns the default
+# -1. A record seen at a lower frequency earns less weight; the main text
+# gives a CNV "observed frequently in the general population (although at a
+# lower frequency than 1 %)" as a likely benign example. XCNV reads
+# "frequently" as above 0.1 %, the frequency that the supplement calls
+# relatively common for case-control data (4N), and gives such a record
+# -0.90, the weight at which 4O alone is likely benign. A frequency above
+# 99 % can be a reference artifact (supplement): such a record is shown but
+# not selected.
+.cnv_2019_population_common <- 0.01
+.cnv_2019_population_frequent <- 0.001
+.cnv_2019_population_artifact <- 0.99
+# ClinGen dosage score of a gene with an autosomal recessive phenotype.
+.cnv_2019_recessive_score <- 30
+.cnv_2019_population_model_id <- "4o-af0.01-0.001-gene-content"
+
+.cnv_2019_population_score <- function(frequency) {
+  if (frequency >= .cnv_2019_population_common) -1 else -0.90
+}
+
+.validate_cnv_2019_population <- function(population) {
+  required <- c(
+    "chr", "start", "end", "record_id", "cnv_type", "frequency",
+    "source_id", "source_release"
+  )
+  missing <- setdiff(required, names(population))
+  if (length(missing)) {
+    stop("population is missing columns: ", paste(missing, collapse = ", "), call. = FALSE)
+  }
+  population <- as.data.frame(population, stringsAsFactors = FALSE)
+  population <- .validate_cnv_2019_bed_relation(population, "population")
+  population <- .cnv_2019_validate_label_columns(
+    population, c("record_id", "cnv_type", "source_id", "source_release"), "population"
+  )
+  if ("assembly" %in% names(population)) {
+    population <- .cnv_2019_validate_label_columns(
+      population, "assembly", "population", allow_missing = TRUE
+    )
+  }
+  if (any(!(population$cnv_type %in% c("loss", "gain")))) {
+    stop("population cnv_type must be loss or gain", call. = FALSE)
+  }
+  population$frequency <- .cnv_2019_parse_numeric(population$frequency)
+  if (any(!is.finite(population$frequency) | population$frequency < 0 |
+          population$frequency > 1)) {
+    stop("population frequency must be a finite value in [0, 1]", call. = FALSE)
+  }
+  population
+}
+
 .empty_cnv_2019_evidence <- function() {
   data.frame(
     cnv_id = character(), cnv_type = character(), criterion = character(),
@@ -578,11 +630,28 @@ score_cnv_2019 <- function(evidence, detail = c("summary", "groups")) {
 
 #' Derive objective ACMG/ClinGen 2019 CNV content evidence
 #'
-#' Derive only the criteria determined mechanically by gene content and
-#' established ClinGen dosage records: section 1 content, section 2A complete
-#' dosage-feature containment, and section 3 protein-coding gene count. Case,
-#' phenotype, segregation, population, partial-gene, and inheritance evidence
-#' are intentionally not inferred. Each input is a BED half-open relation with
+#' Derive only the criteria determined mechanically by gene content,
+#' established ClinGen dosage records and population frequency: section 1
+#' content, section 2A complete dosage-feature containment, section 3
+#' protein-coding gene count and, when a population relation is given,
+#' criterion 4O (overlap with common population variation). Case, phenotype,
+#' segregation, partial-gene, and inheritance evidence are intentionally not
+#' inferred.
+#'
+#' 4O follows Riggs et al. (2020), Supplemental Material 1. A population
+#' record of the CNV's type gives evidence when it contains the CNV's part of
+#' every functional gene that the CNV overlaps, or the whole CNV when it
+#' overlaps none. A gain that overlaps only part of a functional gene gives
+#' no automatic 4O row. Such gains require manual evidence about breakpoints
+#' and transcripts. The record with the highest frequency gives one row: -1
+#' at a frequency of 1 % or more, -0.90 above 0.1 %, and no row at 0.1 % or less.
+#' A record above 99 % (a possible reference artifact), and a loss that
+#' overlaps a ClinGen autosomal recessive gene (dosage score 30), give the row
+#' with `selected = FALSE`, for the curator. A loss that overlaps an
+#' established haploinsufficient record skips section 4 and gets no 4O row.
+#' 4O rows carry `model_id` `"4o-af0.01-0.001-gene-content"`.
+#'
+#' Each input is a BED half-open relation with
 #' non-missing, nonempty character/factor contig labels without leading or
 #' trailing whitespace, and finite, nonnegative integer coordinates in the
 #' exactly representable range `[0, 2^53)` satisfying `start < end`.
@@ -599,12 +668,13 @@ score_cnv_2019 <- function(evidence, detail = c("summary", "groups")) {
 #' rejected for both, while explicit nonfunctional Ensembl-style biotypes remain
 #' valid. Incomplete annotation cannot establish 1B or 3A absence evidence. An
 #' optional `assembly`
-#' column is accepted on all three relations; nonempty relations must declare one
+#' column is accepted on every relation; nonempty relations must declare one
 #' coherent value. GRCh37 and GRCh38 are recognized; other assemblies remain
 #' explicit as `unsupported` in the output contract. A zero-row CNV relation is
 #' neutral and returns typed empty evidence; nonempty CNVs require nonempty gene
-#' and dosage relations, so an empty resource is never interpreted as negative
-#' evidence.
+#' and dosage relations, and a nonempty population relation when one is given,
+#' so an empty resource is never interpreted as negative evidence. Without a
+#' population relation no 4O row is derived.
 #'
 #' @param cnvs Data frame with character/factor, non-missing, nonempty `cnv_id`
 #'   and `cnv_type` (`"loss"` or `"gain"`), and a non-missing, nonempty
@@ -630,12 +700,18 @@ score_cnv_2019 <- function(evidence, detail = c("summary", "groups")) {
 #'   `"protein_coding"`.
 #' @param established_score Finite numeric ClinGen score treated as established;
 #'   defaults to 3. Character and factor labels are parsed by label.
+#' @param population Optional population CNV relation, or `NULL`: one row per
+#'   population record with BED `chr`, `start` and `end`, a nonempty
+#'   `record_id`, `cnv_type` (`"loss"` or `"gain"`), the record's `frequency`
+#'   in `[0, 1]`, and one `source_id` and `source_release`. `frequency` is the
+#'   frequency that may support 4O, such as the highest allele frequency of
+#'   the genetic-ancestry groups that the source counts as eligible.
 #' @return A provenance-complete evidence data frame accepted by
 #'   `score_cnv_2019()`.
 #' @export
 derive_cnv_2019_evidence <- function(
   cnvs, genes, dosage, functional_biotypes = "protein_coding",
-  established_score = 3
+  established_score = 3, population = NULL
 ) {
   cnv_required <- c("cnv_id", "chr", "start", "end", "cnv_type")
   gene_required <- c("chr", "start", "end", "gene_id", "biotype", "source_id", "source_release")
@@ -687,9 +763,12 @@ derive_cnv_2019_evidence <- function(
   }
   dosage$hi_score <- .cnv_2019_parse_numeric(dosage$hi_score)
   dosage$ts_score <- .cnv_2019_parse_numeric(dosage$ts_score)
-  relation_contract <- .xcnv_validate_relation_assemblies(
-    list(cnvs, genes, dosage), c("cnvs", "genes", "dosage")
-  )
+  relations <- list(cnvs = cnvs, genes = genes, dosage = dosage)
+  if (!is.null(population)) {
+    population <- .validate_cnv_2019_population(population)
+    relations$population <- population
+  }
+  relation_contract <- .xcnv_validate_relation_assemblies(relations, names(relations))
   if (anyDuplicated(cnvs$cnv_id) || anyNA(cnvs$cnv_type) ||
       any(!(cnvs$cnv_type %in% c("loss", "gain")))) {
     stop("cnv_id must be unique and cnv_type must be loss or gain", call. = FALSE)
@@ -698,23 +777,39 @@ derive_cnv_2019_evidence <- function(
   gene_release <- if (nrow(genes)) .one_provenance_value(genes, "source_release", "genes") else NA_character_
   dosage_source <- if (nrow(dosage)) .one_provenance_value(dosage, "source_id", "dosage") else NA_character_
   dosage_release <- if (nrow(dosage)) .one_provenance_value(dosage, "source_release", "dosage") else NA_character_
+  if (!is.null(population) && nrow(population)) {
+    population_source <- .one_provenance_value(population, "source_id", "population")
+    population_release <- .one_provenance_value(population, "source_release", "population")
+  }
   if (!nrow(cnvs)) return(.empty_cnv_2019_evidence())
   if (!nrow(genes) || !nrow(dosage)) {
     stop("nonempty CNVs require nonempty gene and dosage relations with explicit provenance", call. = FALSE)
+  }
+  if (!is.null(population) && !nrow(population)) {
+    stop("a population relation for nonempty CNVs must be nonempty", call. = FALSE)
   }
   functional <- genes[genes$biotype %in% functional_biotypes, , drop = FALSE]
   context <- .new_overlap_context("duckdb")
   on.exit(.close_overlap_context(context), add = TRUE)
   gene_pairs <- .bed_overlap_pairs(cnvs, functional, context = context)
   dosage_pairs <- .bed_overlap_pairs(cnvs, dosage, context = context)
+  if (!is.null(population)) {
+    # A record at 0.1 % or less never gives 4O evidence.
+    population <- population[population$frequency > .cnv_2019_population_frequent, , drop = FALSE]
+    population_pairs <- .bed_overlap_pairs(cnvs, population, context = context)
+    population_hits <- split(population_pairs$b_id, factor(population_pairs$a_id, seq_len(nrow(cnvs))))
+  }
   rows <- list()
-  add <- function(cnv, criterion, score, source_id, source_release, evidence_id) {
+  add <- function(
+    cnv, criterion, score, source_id, source_release, evidence_id,
+    selected = TRUE, model_id = NA_character_
+  ) {
     rows[[length(rows) + 1L]] <<- data.frame(
       cnv_id = as.character(cnv$cnv_id), cnv_type = as.character(cnv$cnv_type),
       criterion = criterion, score = score, source_id = source_id,
       source_release = source_release, evidence_id = evidence_id,
-      selected = TRUE, provider_id = source_id,
-      assembly = relation_contract$assembly, model_id = NA_character_,
+      selected = selected, provider_id = source_id,
+      assembly = relation_contract$assembly, model_id = model_id,
       policy_id = .xcnv_policy_id, status = relation_contract$status,
       stringsAsFactors = FALSE
     )
@@ -737,19 +832,53 @@ derive_cnv_2019_evidence <- function(
     gene_score <- c(`3A` = 0, `3B` = .45, `3C` = .90)[[gene_criterion]]
     add(cnv, gene_criterion, gene_score, gene_source, gene_release, paste0("gene-count:", gene_count))
 
+    loss <- identical(cnv$cnv_type[[1L]], "loss")
     dosage_index <- unique(dosage_pairs$b_id[dosage_pairs$a_id == i & !is.na(dosage_pairs$b_id)])
-    if (length(dosage_index)) {
-      score_column <- if (identical(cnv$cnv_type[[1L]], "loss")) "hi_score" else "ts_score"
-      established <- dosage[[score_column]][dosage_index] == established_score
-      fully_contained <-
-        cnv$start[[1L]] <= dosage$start[dosage_index] &
-        cnv$end[[1L]] >= dosage$end[dosage_index]
-      records <- dosage_index[which(!is.na(established) & established & fully_contained)]
-      if (length(records)) {
-        ids <- sort(unique(as.character(dosage$record_id[records])))
-        add(cnv, "2A", 1, dosage_source, dosage_release, paste0("dosage:", paste(ids, collapse = ",")))
-      }
+    score_column <- if (loss) "hi_score" else "ts_score"
+    dosage_scores <- dosage[[score_column]][dosage_index]
+    established <- !is.na(dosage_scores) & dosage_scores == established_score
+    fully_contained <-
+      cnv$start[[1L]] <= dosage$start[dosage_index] &
+      cnv$end[[1L]] >= dosage$end[dosage_index]
+    records <- dosage_index[established & fully_contained]
+    if (length(records)) {
+      ids <- sort(unique(as.character(dosage$record_id[records])))
+      add(cnv, "2A", 1, dosage_source, dosage_release, paste0("dosage:", paste(ids, collapse = ",")))
     }
+
+    # Table 1 skips section 4 for a loss that overlaps an established HI record.
+    if (is.null(population) || (loss && any(established))) next
+    content_start <- cnv$start[[1L]]
+    content_end <- cnv$end[[1L]]
+    if (gene_count) {
+      if (!loss && any(
+        functional$start[gene_index] < content_start |
+        functional$end[gene_index] > content_end
+      )) next
+      content_start <- max(content_start, min(functional$start[gene_index]))
+      content_end <- min(content_end, max(functional$end[gene_index]))
+    }
+    hits <- population_hits[[i]]
+    hits <- hits[!is.na(hits)]
+    hits <- hits[
+      population$cnv_type[hits] == cnv$cnv_type[[1L]] &
+        population$start[hits] <= content_start &
+        population$end[hits] >= content_end
+    ]
+    if (!length(hits)) next
+    plausible <- hits[population$frequency[hits] <= .cnv_2019_population_artifact]
+    selected <- length(plausible) > 0L
+    if (selected) hits <- plausible
+    best <- hits[order(-population$frequency[hits], population$record_id[hits])[[1L]]]
+    recessive <- loss && any(
+      !is.na(dosage_scores) & dosage_scores == .cnv_2019_recessive_score
+    )
+    add(
+      cnv, "4O", .cnv_2019_population_score(population$frequency[[best]]),
+      population_source, population_release,
+      paste0("population:", population$record_id[[best]], ":", signif(population$frequency[[best]], 4)),
+      selected = selected && !recessive, model_id = .cnv_2019_population_model_id
+    )
   }
   if (!length(rows)) return(.empty_cnv_2019_evidence())
   do.call(rbind, rows)
