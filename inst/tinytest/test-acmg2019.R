@@ -439,7 +439,7 @@ population_cnvs <- data.frame(
   assembly = "GRCh38"
 )
 population_evidence <- derive_cnv_2019_evidence(
-  population_cnvs, population_genes, population_dosage, population
+  population_cnvs, population_genes, population_dosage, population = population
 )
 criterion_4o <- population_evidence[population_evidence$criterion == "4O", , drop = FALSE]
 rownames(criterion_4o) <- criterion_4o$cnv_id
@@ -495,36 +495,36 @@ expect_identical(without_population, other_criteria)
 # A given population relation is checked like the other relations, and an
 # empty one is never absence evidence.
 expect_error(derive_cnv_2019_evidence(
-  population_cnvs, population_genes, population_dosage, population[FALSE, , drop = FALSE]
+  population_cnvs, population_genes, population_dosage, population = population[FALSE, , drop = FALSE]
 ))
 expect_equal(nrow(derive_cnv_2019_evidence(
   population_cnvs[FALSE, , drop = FALSE], population_genes, population_dosage,
-  population[FALSE, , drop = FALSE]
+  population = population[FALSE, , drop = FALSE]
 )), 0L)
 for (column in c("record_id", "cnv_type", "frequency", "source_release")) {
   expect_error(derive_cnv_2019_evidence(
     population_cnvs, population_genes, population_dosage,
-    population[, setdiff(names(population), column)]
+    population = population[, setdiff(names(population), column)]
   ))
 }
 for (frequency in list(1.5, -0.1, NA_real_, "nonsense")) {
   bad_frequency <- population
   bad_frequency$frequency[[1L]] <- frequency
   expect_error(derive_cnv_2019_evidence(
-    population_cnvs, population_genes, population_dosage, bad_frequency
+    population_cnvs, population_genes, population_dosage, population = bad_frequency
   ))
 }
 bad_type <- population
 bad_type$cnv_type[[1L]] <- "DEL"
 expect_error(derive_cnv_2019_evidence(
-  population_cnvs, population_genes, population_dosage, bad_type
+  population_cnvs, population_genes, population_dosage, population = bad_type
 ))
 mixed_population_release <- population
 mixed_population_release$source_release[[1L]] <- "4.0"
 expect_error(derive_cnv_2019_evidence(
-  population_cnvs, population_genes, population_dosage, mixed_population_release
+  population_cnvs, population_genes, population_dosage, population = mixed_population_release
 ))
 population_on_grch37 <- transform(population, assembly = "GRCh37")
 expect_error(derive_cnv_2019_evidence(
-  population_cnvs, population_genes, population_dosage, population_on_grch37
+  population_cnvs, population_genes, population_dosage, population = population_on_grch37
 ))

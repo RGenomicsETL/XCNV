@@ -8,9 +8,9 @@ derive_cnv_2019_evidence(
   cnvs,
   genes,
   dosage,
-  population = NULL,
   functional_biotypes = "protein_coding",
-  established_score = 3
+  established_score = 3,
+  population = NULL
 )
 }
 \arguments{
@@ -35,13 +35,6 @@ character/factor \code{chr} without surrounding whitespace, exactly representabl
 nonnegative integer \code{start} and \code{end} in \verb{[0, 2^53)} satisfying \code{start < end},
 plus \code{hi_score} and \code{ts_score}.}
 
-\item{population}{Optional population CNV relation, or \code{NULL}: one row per
-population record with BED \code{chr}, \code{start} and \code{end}, a nonempty
-\code{record_id}, \code{cnv_type} (\code{"loss"} or \code{"gain"}), the record's \code{frequency}
-in \verb{[0, 1]}, and one \code{source_id} and \code{source_release}. \code{frequency} is the
-frequency that may support 4O, such as the highest allele frequency of
-the genetic-ancestry groups that the source counts as eligible.}
-
 \item{functional_biotypes}{Nonempty, unique character/factor biotype labels
 counted as functionally important for sections 1 and 3; surrounding
 whitespace and placeholder tokens are rejected. Defaults to
@@ -49,6 +42,13 @@ whitespace and placeholder tokens are rejected. Defaults to
 
 \item{established_score}{Finite numeric ClinGen score treated as established;
 defaults to 3. Character and factor labels are parsed by label.}
+
+\item{population}{Optional population CNV relation, or \code{NULL}: one row per
+population record with BED \code{chr}, \code{start} and \code{end}, a nonempty
+\code{record_id}, \code{cnv_type} (\code{"loss"} or \code{"gain"}), the record's \code{frequency}
+in \verb{[0, 1]}, and one \code{source_id} and \code{source_release}. \code{frequency} is the
+frequency that may support 4O, such as the highest allele frequency of
+the genetic-ancestry groups that the source counts as eligible.}
 }
 \value{
 A provenance-complete evidence data frame accepted by
@@ -67,8 +67,10 @@ inferred.
 4O follows Riggs et al. (2020), Supplemental Material 1. A population
 record of the CNV's type gives evidence when it contains the CNV's part of
 every functional gene that the CNV overlaps, or the whole CNV when it
-overlaps none. The record with the highest frequency gives one row: -1 at
-a frequency of 1 \% or more, -0.90 above 0.1 \%, and no row at 0.1 \% or less.
+overlaps none. A gain that overlaps only part of a functional gene gives
+no automatic 4O row. Such gains require manual evidence about breakpoints
+and transcripts. The record with the highest frequency gives one row: -1
+at a frequency of 1 \% or more, -0.90 above 0.1 \%, and no row at 0.1 \% or less.
 A record above 99 \% (a possible reference artifact), and a loss that
 overlaps a ClinGen autosomal recessive gene (dosage score 30), give the row
 with \code{selected = FALSE}, for the curator. A loss that overlaps an

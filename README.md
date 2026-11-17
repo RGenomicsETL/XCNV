@@ -173,6 +173,7 @@ one row per population record, with its type (`loss` or `gain`) and the
 |----|----|
 | The record has the CNV’s type | Supplement: a common gain does not make a loss benign, and the reverse |
 | The record holds the CNV’s gene content: it contains the CNV’s part of every functional gene that the CNV overlaps, or the whole CNV when it overlaps none | Supplement: the population CNV “includes the same gene content” |
+| A gain that overlaps only part of a functional gene: no automatic 4O row | Partial-gene gains require manual evidence about breakpoints and transcripts |
 | Frequency 1 % or more: -1 | Supplement: “common” is 1 % or more, default points |
 | Frequency above 0.1 % and below 1 %: -0.90 | Supplement: less weight below 1 %; main text: such a CNV is a likely benign example. 0.1 % is the supplement’s “relatively common” frequency (4N); -0.90 is the weight at which 4O alone is likely benign. This reading is XCNV’s |
 | Frequency 0.1 % or less: no row | as above |

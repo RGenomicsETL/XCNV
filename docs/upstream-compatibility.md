@@ -121,7 +121,9 @@ establish 1B/3A absence evidence. Contig identifiers are exact caller/provider
 contracts: XCNV
 does not infer aliases, and a valid contig with no matching resource row is a
 no-overlap result. This provider is backed by the same DuckDB
-interval join as X-CNV annotation. Partial-gene mechanisms,
+interval join as X-CNV annotation. A gain that overlaps only part of a
+functional gene gets no automatic 4O row. Such gains require manual evidence
+about breakpoints and transcripts. Partial-gene mechanisms,
 PVS1/NMD, phenotype specificity, published cases, segregation, inheritance,
 and case-control evidence are deliberately outside this automatic subset until a
 separately tested provider supplies them.

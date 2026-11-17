@@ -106,7 +106,7 @@ invisible(XCNV::derive_cnv_2019_evidence(
              source_id = "probe", source_release = "probe", assembly = "GRCh38"),
   data.frame(chr = "chr1", start = 0L, end = 1L, record_id = "probe", hi_score = 0,
              ts_score = 0, source_id = "probe", source_release = "probe", assembly = "GRCh38"),
-  population
+  population = population
 ))
 XCNV:::.close_overlap_context(context)
 if (!file.copy(

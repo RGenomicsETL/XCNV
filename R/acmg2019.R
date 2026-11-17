@@ -641,8 +641,10 @@ score_cnv_2019 <- function(evidence, detail = c("summary", "groups")) {
 #' 4O follows Riggs et al. (2020), Supplemental Material 1. A population
 #' record of the CNV's type gives evidence when it contains the CNV's part of
 #' every functional gene that the CNV overlaps, or the whole CNV when it
-#' overlaps none. The record with the highest frequency gives one row: -1 at
-#' a frequency of 1 % or more, -0.90 above 0.1 %, and no row at 0.1 % or less.
+#' overlaps none. A gain that overlaps only part of a functional gene gives
+#' no automatic 4O row. Such gains require manual evidence about breakpoints
+#' and transcripts. The record with the highest frequency gives one row: -1
+#' at a frequency of 1 % or more, -0.90 above 0.1 %, and no row at 0.1 % or less.
 #' A record above 99 % (a possible reference artifact), and a loss that
 #' overlaps a ClinGen autosomal recessive gene (dosage score 30), give the row
 #' with `selected = FALSE`, for the curator. A loss that overlaps an
@@ -692,24 +694,24 @@ score_cnv_2019 <- function(evidence, detail = c("summary", "groups")) {
 #'   character/factor `chr` without surrounding whitespace, exactly representable
 #'   nonnegative integer `start` and `end` in `[0, 2^53)` satisfying `start < end`,
 #'   plus `hi_score` and `ts_score`.
-#' @param population Optional population CNV relation, or `NULL`: one row per
-#'   population record with BED `chr`, `start` and `end`, a nonempty
-#'   `record_id`, `cnv_type` (`"loss"` or `"gain"`), the record's `frequency`
-#'   in `[0, 1]`, and one `source_id` and `source_release`. `frequency` is the
-#'   frequency that may support 4O, such as the highest allele frequency of
-#'   the genetic-ancestry groups that the source counts as eligible.
 #' @param functional_biotypes Nonempty, unique character/factor biotype labels
 #'   counted as functionally important for sections 1 and 3; surrounding
 #'   whitespace and placeholder tokens are rejected. Defaults to
 #'   `"protein_coding"`.
 #' @param established_score Finite numeric ClinGen score treated as established;
 #'   defaults to 3. Character and factor labels are parsed by label.
+#' @param population Optional population CNV relation, or `NULL`: one row per
+#'   population record with BED `chr`, `start` and `end`, a nonempty
+#'   `record_id`, `cnv_type` (`"loss"` or `"gain"`), the record's `frequency`
+#'   in `[0, 1]`, and one `source_id` and `source_release`. `frequency` is the
+#'   frequency that may support 4O, such as the highest allele frequency of
+#'   the genetic-ancestry groups that the source counts as eligible.
 #' @return A provenance-complete evidence data frame accepted by
 #'   `score_cnv_2019()`.
 #' @export
 derive_cnv_2019_evidence <- function(
-  cnvs, genes, dosage, population = NULL, functional_biotypes = "protein_coding",
-  established_score = 3
+  cnvs, genes, dosage, functional_biotypes = "protein_coding",
+  established_score = 3, population = NULL
 ) {
   cnv_required <- c("cnv_id", "chr", "start", "end", "cnv_type")
   gene_required <- c("chr", "start", "end", "gene_id", "biotype", "source_id", "source_release")
@@ -849,6 +851,10 @@ derive_cnv_2019_evidence <- function(
     content_start <- cnv$start[[1L]]
     content_end <- cnv$end[[1L]]
     if (gene_count) {
+      if (!loss && any(
+        functional$start[gene_index] < content_start |
+        functional$end[gene_index] > content_end
+      )) next
       content_start <- max(content_start, min(functional$start[gene_index]))
       content_end <- min(content_end, max(functional$end[gene_index]))
     }
