@@ -91,11 +91,11 @@ expect_equal(
 )
 expect_equal(
   derive_cnv_2019_evidence(
-    positional_cnv, gain_genes, gain_dosage, c("protein_coding", "lncRNA"), 4
+    positional_cnv, gain_genes, gain_dosage, c("protein_coding", "lncRNA"), 2
   ),
   derive_cnv_2019_evidence(
     positional_cnv, gain_genes, gain_dosage,
-    functional_biotypes = c("protein_coding", "lncRNA"), established_score = 4
+    functional_biotypes = c("protein_coding", "lncRNA"), established_score = 2
   )
 )
 expect_equal(

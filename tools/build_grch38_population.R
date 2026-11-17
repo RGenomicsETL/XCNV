@@ -15,8 +15,10 @@
 # recommendation (Ghosh et al. 2018, PMID 30311383): any continental
 # population with more than 2000 alleles. The founder and unassigned groups
 # (ami, asj, fin, mid, rmi) are left out, as in that recommendation and in
-# gnomAD's own group maximum. A record without such a group, or with
-# frequency 0, is left out. BED coordinates are kept as published.
+# gnomAD's own group maximum. `population` and `allele_number` name the group
+# that gives `frequency`; among groups tied at that frequency it is the group
+# with the most alleles, then the first in the order above. A record without
+# such a group, or with frequency 0, is left out. BED coordinates are kept as published.
 #
 # Output, under OUTPUT_DIR:
 #   sources/gnomad.v4.1.sv.sites.bed.gz and its receipt   staged input
@@ -78,17 +80,29 @@ DBI::dbExecute(con, sprintf(
 ))
 DBI::dbExecute(con, sprintf(
   "COPY (
+     WITH long AS (
+       SELECT rowid AS site, chr, start, \"end\", record_id, svtype,
+         unnest(eligible) AS af, unnest(alleles) AS an,
+         unnest(list_value(%s)) AS population, unnest(range(%d)) AS ordinal
+       FROM sites
+       WHERE filter = 'PASS' AND svtype IN ('DEL', 'DUP')
+     ), best AS (
+       SELECT site, chr, start, \"end\", record_id, svtype, max(af) AS frequency,
+         arg_max(population, list_value(af, an::DOUBLE, -ordinal::DOUBLE)) AS population,
+         arg_max(an, list_value(af, an::DOUBLE, -ordinal::DOUBLE)) AS allele_number
+       FROM long
+       WHERE af IS NOT NULL
+       GROUP BY site, chr, start, \"end\", record_id, svtype
+     )
      SELECT chr, start, \"end\", record_id,
        CASE svtype WHEN 'DEL' THEN 'loss' ELSE 'gain' END AS cnv_type,
-       list_max(eligible) AS frequency,
-       list_value(%s)[list_position(eligible, list_max(eligible))] AS population,
-       alleles[list_position(eligible, list_max(eligible))] AS allele_number,
+       frequency, population, allele_number,
        'gnomad_sv' AS source_id, %s AS source_release, 'GRCh38' AS assembly
-     FROM sites
-     WHERE filter = 'PASS' AND svtype IN ('DEL', 'DUP') AND list_max(eligible) > 0
+     FROM best
+     WHERE frequency > 0
      ORDER BY chr, start, record_id
    ) TO %s (FORMAT parquet)",
-  paste(vapply(groups, quote, character(1)), collapse = ", "),
+  paste(vapply(groups, quote, character(1)), collapse = ", "), length(groups),
   quote(gnomad_release), quote(file.path(relation_dir, "population.parquet"))
 ))
 counts <- DBI::dbGetQuery(con,
