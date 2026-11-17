@@ -1,5 +1,17 @@
 # XCNV 0.0.0.9000
 
+* `derive_cnv_2019_evidence()` derives the section 2 criteria of established
+  benign records from the ClinGen dosage records of score 40 ("dosage
+  sensitivity unlikely"), by Tables 1 and 2 of Riggs et al. (2020): losses
+  2F (-1, inside a benign record) and 2G (0, overlap beyond it); gains 2C
+  (-1, the record's gene content), 2D (-1, inside without a breakpoint in a
+  protein-coding gene), 2E (0, inside with one), 2F (-1, around the record
+  without an additional gene) and 2G (0, other overlap). A CNV gets one such
+  row. Section 1 now gives 1A to a CNV that overlaps an established
+  dosage-sensitive record without a protein-coding gene, such as a loss of
+  the non-coding *TERC* or *XIST* gene (before: 1B, -0.60); section 3 still
+  counts protein-coding genes only.
+
 * `derive_cnv_2019_evidence()` derives criterion 4O, overlap with common
   population variation, from an optional `population` relation (one row per
   population record with its type and frequency). A record of the CNV's type
