@@ -582,6 +582,9 @@ score_cnv_2019 <- function(evidence, detail = c("summary", "groups")) {
 .cnv_2019_population_artifact <- 0.99
 # ClinGen dosage score of a gene with an autosomal recessive phenotype.
 .cnv_2019_recessive_score <- 30
+# ClinGen dosage score of an established benign gene or region, "dosage
+# sensitivity unlikely" (Riggs et al. 2020, Supplemental Material 1, section 2).
+.cnv_2019_benign_score <- 40
 .cnv_2019_population_model_id <- "4o-af0.01-0.001-gene-content"
 
 .cnv_2019_population_score <- function(frequency) {
@@ -618,6 +621,45 @@ score_cnv_2019 <- function(evidence, detail = c("summary", "groups")) {
   population
 }
 
+# Section 2 overlap with established benign records (Riggs et al. 2020,
+# Tables 1 and 2). `records` index the benign records of the CNV's dosage
+# direction that the CNV overlaps. A loss that one record contains is 2F;
+# other overlapping losses are 2G. A gain is judged against each record, with
+# the functional genes as the standard's protein-coding genes: with the
+# record's own interval 2C; inside the record 2D, or 2E when a breakpoint
+# interrupts a gene; around the record 2F when it adds no gene, otherwise 2G;
+# across one record boundary 2C when it holds the record's genes, at least
+# one, and no breakpoint interrupts one, otherwise 2G. As for 4O, a gene-free
+# CNV matches a record's content only inside it. The record with the
+# strongest benign criterion gives the row.
+.cnv_2019_benign_order <- c("2C", "2D", "2F", "2E", "2G")
+.cnv_2019_benign_points <- c(`2C` = -1, `2D` = -1, `2F` = -1, `2E` = 0, `2G` = 0)
+
+.cnv_2019_benign_overlap <- function(
+  cnv, records, dosage, gene_ids, interrupts, record_genes
+) {
+  inside <- dosage$start[records] <= cnv$start[[1L]] &
+    dosage$end[records] >= cnv$end[[1L]]
+  if (identical(cnv$cnv_type[[1L]], "loss")) {
+    by_record <- ifelse(inside, "2F", "2G")
+  } else {
+    around <- dosage$start[records] >= cnv$start[[1L]] &
+      dosage$end[records] <= cnv$end[[1L]]
+    by_record <- vapply(seq_along(records), function(k) {
+      content <- record_genes[[records[[k]]]]
+      if (inside[[k]] && around[[k]]) return("2C")
+      if (inside[[k]]) return(if (interrupts) "2E" else "2D")
+      if (around[[k]]) return(if (all(gene_ids %in% content)) "2F" else "2G")
+      if (length(gene_ids) && !interrupts && setequal(gene_ids, content)) "2C" else "2G"
+    }, character(1))
+  }
+  criterion <- .cnv_2019_benign_order[[min(match(by_record, .cnv_2019_benign_order))]]
+  list(
+    criterion = criterion, score = .cnv_2019_benign_points[[criterion]],
+    records = records[by_record == criterion]
+  )
+}
+
 .empty_cnv_2019_evidence <- function() {
   data.frame(
     cnv_id = character(), cnv_type = character(), criterion = character(),
@@ -631,12 +673,35 @@ score_cnv_2019 <- function(evidence, detail = c("summary", "groups")) {
 #' Derive objective ACMG/ClinGen 2019 CNV content evidence
 #'
 #' Derive only the criteria determined mechanically by gene content,
-#' established ClinGen dosage records and population frequency: section 1
-#' content, section 2A complete dosage-feature containment, section 3
-#' protein-coding gene count and, when a population relation is given,
-#' criterion 4O (overlap with common population variation). Case, phenotype,
-#' segregation, partial-gene, and inheritance evidence are intentionally not
-#' inferred.
+#' ClinGen dosage records and population frequency: section 1 content,
+#' section 2A complete dosage-feature containment, the section 2 overlap with
+#' established benign records (2F and 2G for losses, 2C to 2G for gains),
+#' section 3 protein-coding gene count and, when a population relation is
+#' given, criterion 4O (overlap with common population variation). Case,
+#' phenotype, segregation, partial-gene, and inheritance evidence are
+#' intentionally not inferred.
+#'
+#' Section 1 gives 1A to a CNV that overlaps a functional gene or another
+#' known functionally important element: an established dosage-sensitive
+#' record (haploinsufficiency or triplosensitivity score `established_score`)
+#' of either direction, such as the non-coding *TERC* or *XIST* gene. Its
+#' `evidence_id` is `genes:<ids>` or, without a functional gene,
+#' `dosage:<ids>`. Section 3 counts the functional genes only.
+#'
+#' Established benign records are ClinGen dosage records of score 40,
+#' "dosage sensitivity unlikely": the haploinsufficiency score for a loss,
+#' the triplosensitivity score for a gain. A loss inside one such record is
+#' 2F (-1); a loss that overlaps one but extends beyond it is 2G (0). A gain
+#' is compared with each record it overlaps, by Table 2 of Riggs et al.
+#' (2020), where the standard's protein-coding genes are the functional genes
+#' of `functional_biotypes`. With the record's own interval it is 2C (-1).
+#' Inside the record it is 2D (-1), or 2E (0) when a breakpoint interrupts a
+#' gene. Around the record it is 2F (-1) when it adds
+#' no gene, otherwise 2G (0). Across one boundary of the record it is 2C (-1)
+#' when it holds the record's genes, at least one, and neither breakpoint
+#' interrupts one, otherwise 2G (0). A CNV gets one such
+#' row, from the record or records with the strongest benign criterion, and
+#' its `evidence_id` is `dosage:<ids>`.
 #'
 #' 4O follows Riggs et al. (2020), Supplemental Material 1. A population
 #' record of the CNV's type gives evidence when it contains the CNV's part of
@@ -695,7 +760,7 @@ score_cnv_2019 <- function(evidence, detail = c("summary", "groups")) {
 #'   nonnegative integer `start` and `end` in `[0, 2^53)` satisfying `start < end`,
 #'   plus `hi_score` and `ts_score`.
 #' @param functional_biotypes Nonempty, unique character/factor biotype labels
-#'   counted as functionally important for sections 1 and 3; surrounding
+#'   of the functional genes of sections 1, 2 and 3; surrounding
 #'   whitespace and placeholder tokens are rejected. Defaults to
 #'   `"protein_coding"`.
 #' @param established_score Finite numeric ClinGen score treated as established;
@@ -793,6 +858,19 @@ derive_cnv_2019_evidence <- function(
   on.exit(.close_overlap_context(context), add = TRUE)
   gene_pairs <- .bed_overlap_pairs(cnvs, functional, context = context)
   dosage_pairs <- .bed_overlap_pairs(cnvs, dosage, context = context)
+  # The protein-coding gene content of each benign triplosensitivity record,
+  # which gain criteria 2C and 2F compare with the gain's own.
+  benign_gain <- which(!is.na(dosage$ts_score) & dosage$ts_score == .cnv_2019_benign_score)
+  record_genes <- vector("list", nrow(dosage))
+  if (length(benign_gain) && any(cnvs$cnv_type == "gain")) {
+    record_pairs <- .bed_overlap_pairs(
+      dosage[benign_gain, , drop = FALSE], functional, context = context
+    )
+    record_pairs <- record_pairs[!is.na(record_pairs$b_id), , drop = FALSE]
+    record_genes[benign_gain] <- lapply(seq_along(benign_gain), function(k) {
+      unique(as.character(functional$gene_id[record_pairs$b_id[record_pairs$a_id == k]]))
+    })
+  }
   if (!is.null(population)) {
     # A record at 0.1 % or less never gives 4O evidence.
     population <- population[population$frequency > .cnv_2019_population_frequent, , drop = FALSE]
@@ -819,8 +897,20 @@ derive_cnv_2019_evidence <- function(
     gene_index <- unique(gene_pairs$b_id[gene_pairs$a_id == i & !is.na(gene_pairs$b_id)])
     gene_ids <- sort(unique(as.character(functional$gene_id[gene_index])))
     gene_count <- length(gene_ids)
+    dosage_index <- unique(dosage_pairs$b_id[dosage_pairs$a_id == i & !is.na(dosage_pairs$b_id)])
+    # Section 1 counts functional genes and the other known functionally
+    # important elements: established dosage-sensitive records of either
+    # direction, such as the non-coding TERC and XIST genes. Section 3 counts
+    # the functional genes only.
+    elements <- dosage_index[
+      (!is.na(dosage$hi_score[dosage_index]) & dosage$hi_score[dosage_index] == established_score) |
+        (!is.na(dosage$ts_score[dosage_index]) & dosage$ts_score[dosage_index] == established_score)
+    ]
     if (gene_count) {
       add(cnv, "1A", 0, gene_source, gene_release, paste0("genes:", paste(gene_ids, collapse = ",")))
+    } else if (length(elements)) {
+      element_ids <- sort(unique(as.character(dosage$record_id[elements])))
+      add(cnv, "1A", 0, dosage_source, dosage_release, paste0("dosage:", paste(element_ids, collapse = ",")))
     } else {
       add(cnv, "1B", -0.60, gene_source, gene_release, "genes:none")
     }
@@ -833,7 +923,6 @@ derive_cnv_2019_evidence <- function(
     add(cnv, gene_criterion, gene_score, gene_source, gene_release, paste0("gene-count:", gene_count))
 
     loss <- identical(cnv$cnv_type[[1L]], "loss")
-    dosage_index <- unique(dosage_pairs$b_id[dosage_pairs$a_id == i & !is.na(dosage_pairs$b_id)])
     score_column <- if (loss) "hi_score" else "ts_score"
     dosage_scores <- dosage[[score_column]][dosage_index]
     established <- !is.na(dosage_scores) & dosage_scores == established_score
@@ -844,6 +933,22 @@ derive_cnv_2019_evidence <- function(
     if (length(records)) {
       ids <- sort(unique(as.character(dosage$record_id[records])))
       add(cnv, "2A", 1, dosage_source, dosage_release, paste0("dosage:", paste(ids, collapse = ",")))
+    }
+    benign <- dosage_index[!is.na(dosage_scores) & dosage_scores == .cnv_2019_benign_score]
+    if (length(benign)) {
+      # A breakpoint interrupts a functional gene that the CNV holds only in part.
+      interrupts <- any(
+        functional$start[gene_index] < cnv$start[[1L]] |
+          functional$end[gene_index] > cnv$end[[1L]]
+      )
+      overlap <- .cnv_2019_benign_overlap(
+        cnv, benign, dosage, gene_ids, interrupts, record_genes
+      )
+      ids <- sort(unique(as.character(dosage$record_id[overlap$records])))
+      add(
+        cnv, overlap$criterion, overlap$score, dosage_source, dosage_release,
+        paste0("dosage:", paste(ids, collapse = ","))
+      )
     }
 
     # Table 1 skips section 4 for a loss that overlaps an established HI record.

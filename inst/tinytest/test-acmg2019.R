@@ -263,7 +263,18 @@ nonfunctional_biotype$biotype <- "lncRNA"
 nonfunctional_evidence <- derive_cnv_2019_evidence(
   cnvs[1, , drop = FALSE], nonfunctional_biotype, dosage
 )
-expect_identical(sort(nonfunctional_evidence$criterion), c("1B", "2A", "3A"))
+# An established dosage-sensitive record is a functionally important element
+# for section 1 even without a functional gene, as for the non-coding TERC.
+expect_identical(sort(nonfunctional_evidence$criterion), c("1A", "2A", "3A"))
+expect_equal(
+  nonfunctional_evidence$evidence_id[nonfunctional_evidence$criterion == "1A"], "dosage:HI1"
+)
+expect_equal(
+  nonfunctional_evidence$source_id[nonfunctional_evidence$criterion == "1A"], "ClinGen"
+)
+expect_equal(
+  nonfunctional_evidence$evidence_id[nonfunctional_evidence$criterion == "3A"], "gene-count:0"
+)
 factor_biotype <- genes
 factor_biotype$biotype <- factor(factor_biotype$biotype)
 expect_true("1A" %in% derive_cnv_2019_evidence(
@@ -528,3 +539,93 @@ population_on_grch37 <- transform(population, assembly = "GRCh37")
 expect_error(derive_cnv_2019_evidence(
   population_cnvs, population_genes, population_dosage, population = population_on_grch37
 ))
+
+# Section 2 overlap with established benign records (ClinGen dosage score 40;
+# Riggs et al. 2020, Tables 1 and 2). BEN is benign for losses and gains,
+# BEN2 for gains only, HIONLY for losses only. NCHI3 is an established
+# haploinsufficient non-coding gene.
+benign_genes <- data.frame(
+  chr = "chr5", start = c(1000L, 3000L, 6000L, 9000L),
+  end = c(2000L, 4000L, 7000L, 9500L), gene_id = c("GA", "GB", "GC", "NC"),
+  biotype = c("protein_coding", "protein_coding", "protein_coding", "lncRNA"),
+  source_id = "gencode", source_release = "50", assembly = "GRCh38"
+)
+benign_dosage <- data.frame(
+  chr = "chr5", start = c(500L, 2000L, 6000L, 9000L),
+  end = c(4500L, 2600L, 7000L, 9500L),
+  record_id = c("BEN", "BEN2", "HIONLY", "NCHI3"),
+  hi_score = c(40, 0, 40, 3), ts_score = c(40, 40, 0, 0),
+  source_id = "clingen_dosage", source_release = "2026-11-08", assembly = "GRCh38"
+)
+benign_cnvs <- data.frame(
+  cnv_id = c(
+    "loss_2f", "loss_2g", "loss_element", "loss_element_partial",
+    "gain_2c_same", "gain_2c_shifted", "gain_2d", "gain_2e", "gain_2f",
+    "gain_2g_around", "gain_2g_partial", "gain_gene_free_partial",
+    "gain_gene_free_inside", "gain_hi_only"
+  ),
+  chr = "chr5",
+  start = c(
+    1500L, 3500L, 8900L, 9100L,
+    500L, 800L, 900L, 1500L, 400L, 400L, 3500L, 4200L, 2200L, 6100L
+  ),
+  end = c(
+    3500L, 6500L, 9600L, 9400L,
+    4500L, 4600L, 2500L, 3500L, 5000L, 6500L, 5000L, 5200L, 2800L, 6900L
+  ),
+  cnv_type = rep(c("loss", "gain"), c(4L, 10L)), assembly = "GRCh38"
+)
+benign_evidence <- derive_cnv_2019_evidence(benign_cnvs, benign_genes, benign_dosage)
+section2 <- benign_evidence[
+  benign_evidence$criterion %in% c("2C", "2D", "2E", "2F", "2G"), , drop = FALSE
+]
+# One benign-record row per CNV, from the ClinGen release.
+expect_false(anyDuplicated(section2$cnv_id) > 0L)
+expect_true(all(section2$source_id == "clingen_dosage"))
+rownames(section2) <- section2$cnv_id
+expected_section2 <- data.frame(
+  cnv_id = c(
+    "loss_2f", "loss_2g", "gain_2c_same", "gain_2c_shifted", "gain_2d",
+    "gain_2e", "gain_2f", "gain_2g_around", "gain_2g_partial",
+    "gain_gene_free_partial", "gain_gene_free_inside"
+  ),
+  criterion = c("2F", "2G", "2C", "2C", "2D", "2E", "2F", "2G", "2G", "2G", "2D"),
+  score = c(-1, 0, -1, -1, -1, 0, -1, 0, 0, 0, -1),
+  evidence_id = c(
+    "dosage:BEN", "dosage:BEN,HIONLY", "dosage:BEN", "dosage:BEN", "dosage:BEN",
+    "dosage:BEN", "dosage:BEN", "dosage:BEN,BEN2", "dosage:BEN", "dosage:BEN",
+    "dosage:BEN"
+  )
+)
+observed_section2 <- section2[expected_section2$cnv_id, c("cnv_id", "criterion", "score", "evidence_id")]
+rownames(observed_section2) <- NULL
+expect_equal(observed_section2, expected_section2)
+# A loss reads the haploinsufficiency score and a gain the triplosensitivity
+# score, so neither the established NCHI3 loss nor the HIONLY gain gets a row.
+expect_false(any(c("loss_element", "loss_element_partial", "gain_hi_only") %in% section2$cnv_id))
+
+benign_summary <- score_cnv_2019(benign_evidence)
+rownames(benign_summary) <- benign_summary$cnv_id
+expected_scores <- c(
+  loss_2f = -1, loss_2g = 0, loss_element = 1, loss_element_partial = 0,
+  gain_2c_same = -1, gain_2c_shifted = -1, gain_2d = -1, gain_2e = 0,
+  gain_2f = -1, gain_2g_around = 0, gain_2g_partial = 0,
+  gain_gene_free_partial = -0.60, gain_gene_free_inside = -1.60, gain_hi_only = 0
+)
+expect_equal(benign_summary[names(expected_scores), "score"], unname(expected_scores))
+expect_equal(benign_summary["loss_2f", "classification"], "benign")
+expect_equal(benign_summary["gain_2d", "classification"], "benign")
+expect_equal(benign_summary["gain_2e", "classification"], "uncertain_significance")
+
+# Section 1: a loss of the established non-coding NCHI3 gets 1A from the
+# dosage record, and 2A when it contains it; section 3 still counts no gene.
+section1 <- benign_evidence[benign_evidence$criterion %in% c("1A", "1B"), , drop = FALSE]
+rownames(section1) <- section1$cnv_id
+expect_equal(section1[c("loss_element", "loss_element_partial"), "criterion"], c("1A", "1A"))
+expect_equal(section1[c("loss_element", "loss_element_partial"), "evidence_id"], rep("dosage:NCHI3", 2L))
+expect_equal(section1["loss_element", "source_id"], "clingen_dosage")
+expect_equal(section1["gain_gene_free_inside", "criterion"], "1B")
+expect_equal(benign_summary["loss_element", "classification"], "pathogenic")
+expect_true(all(benign_evidence$criterion[benign_evidence$cnv_id == "loss_element"] %in% c("1A", "2A", "3A")))
+# A benign record of score 40 is not a functionally important element.
+expect_equal(section1["gain_gene_free_partial", "criterion"], "1B")

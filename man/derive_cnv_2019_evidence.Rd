@@ -36,7 +36,7 @@ nonnegative integer \code{start} and \code{end} in \verb{[0, 2^53)} satisfying \
 plus \code{hi_score} and \code{ts_score}.}
 
 \item{functional_biotypes}{Nonempty, unique character/factor biotype labels
-counted as functionally important for sections 1 and 3; surrounding
+of the functional genes of sections 1, 2 and 3; surrounding
 whitespace and placeholder tokens are rejected. Defaults to
 \code{"protein_coding"}.}
 
@@ -56,14 +56,37 @@ A provenance-complete evidence data frame accepted by
 }
 \description{
 Derive only the criteria determined mechanically by gene content,
-established ClinGen dosage records and population frequency: section 1
-content, section 2A complete dosage-feature containment, section 3
-protein-coding gene count and, when a population relation is given,
-criterion 4O (overlap with common population variation). Case, phenotype,
-segregation, partial-gene, and inheritance evidence are intentionally not
-inferred.
+ClinGen dosage records and population frequency: section 1 content,
+section 2A complete dosage-feature containment, the section 2 overlap with
+established benign records (2F and 2G for losses, 2C to 2G for gains),
+section 3 protein-coding gene count and, when a population relation is
+given, criterion 4O (overlap with common population variation). Case,
+phenotype, segregation, partial-gene, and inheritance evidence are
+intentionally not inferred.
 }
 \details{
+Section 1 gives 1A to a CNV that overlaps a functional gene or another
+known functionally important element: an established dosage-sensitive
+record (haploinsufficiency or triplosensitivity score \code{established_score})
+of either direction, such as the non-coding \emph{TERC} or \emph{XIST} gene. Its
+\code{evidence_id} is \verb{genes:<ids>} or, without a functional gene,
+\verb{dosage:<ids>}. Section 3 counts the functional genes only.
+
+Established benign records are ClinGen dosage records of score 40,
+"dosage sensitivity unlikely": the haploinsufficiency score for a loss,
+the triplosensitivity score for a gain. A loss inside one such record is
+2F (-1); a loss that overlaps one but extends beyond it is 2G (0). A gain
+is compared with each record it overlaps, by Table 2 of Riggs et al.
+(2020), where the standard's protein-coding genes are the functional genes
+of \code{functional_biotypes}. With the record's own interval it is 2C (-1).
+Inside the record it is 2D (-1), or 2E (0) when a breakpoint interrupts a
+gene. Around the record it is 2F (-1) when it adds
+no gene, otherwise 2G (0). Across one boundary of the record it is 2C (-1)
+when it holds the record's genes, at least one, and neither breakpoint
+interrupts one, otherwise 2G (0). A CNV gets one such
+row, from the record or records with the strongest benign criterion, and
+its \code{evidence_id} is \verb{dosage:<ids>}.
+
 4O follows Riggs et al. (2020), Supplemental Material 1. A population
 record of the CNV's type gives evidence when it contains the CNV's part of
 every functional gene that the CNV overlaps, or the whole CNV when it

@@ -101,9 +101,11 @@ classification, and multiple releases are not concatenated into one misleading
 scalar.
 
 `derive_cnv_2019_evidence()` implements the current automatic subset: section 1
-functional content, section 2A complete containment of an established ClinGen
-HI/TS feature, section 3 protein-coding gene count, and criterion 4O from an
-optional population relation (README, "Criterion 4O"). Its CNV, gene,
+content (functional genes and established ClinGen records), section 2A
+complete containment of an established ClinGen HI/TS feature, the section 2
+overlap with ClinGen benign (score 40) records (2F and 2G for losses, 2C to 2G
+for gains), section 3 protein-coding gene count, and criterion 4O from an
+optional population relation (README, "Sections 1 and 2" and "Criterion 4O"). Its CNV, gene,
 dosage and population inputs must have nonempty contigs and exactly representable nonnegative
 integer half-open BED coordinates in `[0, 2^53)` with `start < end`; character
 coordinates are range-checked before conversion, so values at or beyond `2^53`

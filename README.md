@@ -75,10 +75,12 @@ score_cnv_2019(evidence)[, c("cnv_id", "cnv_type", "score", "classification", "s
 #> 1 clinvar-72461     loss     1     pathogenic supported
 ```
 
-The automatic provider derives sections 1, 2A and 3 from gene and dosage
-tables, and criterion 4O from a population CNV table when you give one
-([criterion 4O](#criterion-4o)). Phenotype, inheritance, segregation,
-case and partial-gene evidence are extra rows that you supply.
+The automatic provider derives sections 1 and 3 and the section 2
+criteria of established dosage-sensitive and benign records from gene
+and dosage tables ([sections 1 and 2](#sections-1-and-2)), and criterion
+4O from a population CNV table when you give one ([criterion
+4O](#criterion-4o)). Phenotype, inheritance, segregation, case and
+partial-gene evidence are extra rows that you supply.
 
 ## GRCh38 calls
 
@@ -160,6 +162,36 @@ pathogenic.
 sources. `tools/build_grch38_population.R` builds the population
 relation of criterion 4O, `grch38/population.parquet`, from the
 gnomAD-SV 4.1 sites file (CC0 1.0), pinned by SHA-256.
+
+### Sections 1 and 2
+
+`derive_cnv_2019_evidence()` reads the ClinGen dosage relation for
+section 1 and section 2 (Riggs et al. 2020, Tables 1 and 2, and
+Supplemental Material 1). A record is established at score 3 and benign
+at score 40 (“dosage sensitivity unlikely”). A loss reads the
+haploinsufficiency score, a gain the triplosensitivity score. The
+functional genes (`functional_biotypes`, protein-coding by default)
+stand for the standard’s protein-coding genes.
+
+| Criterion | Points | Rule | Source |
+|----|---:|----|----|
+| 1A | 0 | The CNV overlaps a functional gene, or an established record of either score (`dosage:<ids>`), such as the non-coding *TERC* or *XIST* gene | 1A: “protein-coding or other known functionally important elements” |
+| 1B | -0.60 | Neither | 1B |
+| 2A | 1 | The CNV contains an established record | 2A |
+| Loss 2F | -1 | A benign record contains the loss | Table 1, 2F: “completely contained within an established benign CNV region” |
+| Loss 2G | 0 | The loss overlaps benign records, none contains it | Table 1, 2G |
+| Gain 2C | -1 | The gain has the record’s interval, or crosses one record boundary and holds the record’s genes, at least one, with no breakpoint in a gene | Table 2, 2C: “identical in gene content” |
+| Gain 2D | -1 | The record contains the gain, no breakpoint in a gene | Table 2, 2D |
+| Gain 2E | 0 | The record contains the gain, a breakpoint in a gene | Table 2, 2E |
+| Gain 2F | -1 | The gain contains the record and adds no gene | Table 2, 2F: “larger …, does not include additional protein-coding genes” |
+| Gain 2G | 0 | Any other overlap with a benign record | Table 2, 2G |
+
+Section 3 counts the functional genes only. A CNV gets one benign-record
+row: the record or records with the strongest criterion, in the order
+2C, 2D, 2F, 2E, 2G, give it, and its `evidence_id` is `dosage:<ids>`. A
+gene-free gain matches a record’s gene content only inside it, as for
+4O. The calculator of the ClinGen CNV interface suggests -0.90 for gain
+2F; XCNV uses the published Table 2 default, -1.
 
 ### Criterion 4O
 
