@@ -12,10 +12,9 @@ separate lanes:
 - **ACMG/ClinGen**: the 2019 constitutional CNV standard. Each criterion
   is one evidence row that you can inspect, change and rescore.
 
-DuckDB does the overlap joins. R does validation, feature reduction, the
-tree evaluator and scoring. No bedtools and no XGBoost are needed at run
-time. Ownership, output contracts and validation rules are in
-[`ARCHITECTURE.md`](ARCHITECTURE.md).
+DuckDB does the overlap joins and R does the rest. No bedtools and no
+XGBoost are needed at run time. [`ARCHITECTURE.md`](ARCHITECTURE.md)
+gives the ownership, output contracts and validation rules.
 
 ## Installation
 
@@ -26,10 +25,11 @@ install.packages(
 )
 ```
 
-## Example: a ClinVar deletion
+## A ClinVar deletion
 
 The package includes the annotations for one real case, ClinVar allele
-72461: a pathogenic deletion that contains `SOX2`.
+72461: a pathogenic deletion that contains `SOX2`. These annotations are
+a subset for this case only.
 
 ``` r
 library(XCNV)
@@ -44,8 +44,15 @@ example$clinvar[, c("clinvar_allele_id", "clinical_significance",
 
 ### X-CNV score
 
+`run_xcnv()` reads a BED-like file (chromosome, start, end, `gain` or
+`loss`), scores each call and writes the X-CNV output table:
+
 ``` r
-prediction <- predict_cnv(example$cnv, example$resources)
+input <- file.path(tempdir(), "clinvar-72461.bed")
+write.table(example$cnv[, c("chr", "start", "end", "type")], input,
+            sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
+output <- file.path(tempdir(), "clinvar-72461.output.csv")
+prediction <- run_xcnv(input, example$resources, output = output)
 prediction[, c("Chr", "Start", "End", "Type", "gain.freq", "loss.freq",
                "pLI", "Episcore", "GHIS", "MVP_score")]
 #>   Chr     Start       End Type gain.freq loss.freq       pLI  Episcore
@@ -56,67 +63,25 @@ prediction[, c("Chr", "Start", "End", "Type", "gain.freq", "loss.freq",
 
 ### ACMG/ClinGen evidence and class
 
-The deletion contains `SOX2`, an established haploinsufficient gene, so
-criterion 2A gives one point.
+`SOX2` is an established haploinsufficient gene, so criterion 2A gives
+one point:
 
 ``` r
-cnv <- transform(example$cnv, cnv_id = example$clinvar$cnv_id,
-                 cnv_type = type, assembly = "GRCh37")
-genes <- transform(example$genes, assembly = "GRCh37")
-dosage <- transform(example$dosage, assembly = "GRCh37")
-evidence <- derive_cnv_2019_evidence(cnv, genes, dosage)
+cnv <- transform(example$cnv, cnv_id = example$clinvar$cnv_id, cnv_type = type)
+evidence <- derive_cnv_2019_evidence(cnv, example$genes, example$dosage)
 evidence[, c("criterion", "score", "source_id", "evidence_id")]
 #>   criterion score                       source_id             evidence_id
 #> 1        1A     0                         GENCODE genes:ENSG00000181449.2
 #> 2        3A     0                         GENCODE            gene-count:1
 #> 3        2A     1 ClinGen Gene Dosage Sensitivity       dosage:HGNC:11195
-score_cnv_2019(evidence)[, c("cnv_id", "cnv_type", "score", "classification", "status")]
-#>          cnv_id cnv_type score classification    status
-#> 1 clinvar-72461     loss     1     pathogenic supported
+score_cnv_2019(evidence)[, c("cnv_id", "score", "classification", "status")]
+#>          cnv_id score classification    status
+#> 1 clinvar-72461     1     pathogenic supported
 ```
 
-The automatic provider derives sections 1 and 3 and the section 2
-criteria of established dosage-sensitive and benign records from gene
-and dosage tables ([sections 1 and 2](#sections-1-and-2)), and criterion
-4O from a population CNV table when you give one ([criterion
-4O](#criterion-4o)). Phenotype, inheritance, segregation, case and
-partial-gene evidence are extra rows that you supply.
-
-## GRCh38 calls
-
-The X-CNV model and its resources are GRCh37. Declare a liftover to
-score GRCh38 calls. XCNV lifts each call with DuckHTS and scores the
-GRCh37 interval:
-
-``` r
-liftover <- xcnv_liftover(
-  chain = "xcnv-resources/liftover/GRCh38_to_GRCh37.chain.gz",
-  source_fasta = "GRCh38.fa", destination_fasta = "GRCh37.fa",
-  source_assembly = "GRCh38", destination_assembly = "GRCh37",
-  release = "ensembl-76-GRCh38_to_GRCh37"
-)
-predict_cnv(grch38_calls, resources, liftover = liftover)
-```
-
-The chain is Ensembl’s GRCh38 to GRCh37 assembly mapping, which Ensembl
-publishes without restriction on use. DuckHTS reads it compressed and
-matches contigs with or without `chr`, so it lifts calls on a
-`chr1`-named GRCh38 FASTA to a `1`-named GRCh37 FASTA as published.
-
-The chain also maps GRCh38 regions to GRCh37 patch contigs
-(`HG1423_PATCH` and others), which a primary GRCh37 FASTA such as
-`human_g1k_v37` lacks. DuckHTS follows the chain and does not check the
-destination contig against the destination FASTA. A call with an end in
-such a region is `unsupported`, with `contig_changed` or `end_unmapped`.
-On 3,735 ClinVar copy-number records with both GRCh38 and GRCh37
-coordinates, lifted from the GIAB GRCh38 FASTA to `human_g1k_v37`, the
-chain lifts 3,458 calls (92.6%); the same chain without its patch-contig
-chains lifts 3,568 (95.5%) and changes no lifted interval.
-
-Each row keeps its GRCh38 coordinates and adds the lifted interval. A
-call that does not lift to one interval on the same contig and strand is
-`unsupported`, with a `liftover_reason` and no `MVP_score`. The
-ACMG/ClinGen lane works on GRCh38 directly.
+XCNV derives sections 1 to 3 from gene and dosage tables, and criterion
+4O from a population CNV table. You supply phenotype, inheritance,
+segregation, case and partial-gene evidence as extra rows.
 
 ## Resources
 
@@ -124,109 +89,195 @@ The resources are on Hugging Face at
 [`RgenomicsETL/xcnv-resources`](https://huggingface.co/datasets/RgenomicsETL/xcnv-resources).
 `SHA256SUMS` covers every file.
 
-| Folder | Contents | Used by |
-|----|----|----|
-| `grch37/` | X-CNV annotations and model | X-CNV lane |
-| `grch38/` | GENCODE 50 genes and ClinGen dosage as Parquet, with `sources.tsv` | ACMG/ClinGen lane |
-| `liftover/` | Ensembl GRCh38 to GRCh37 chain | X-CNV lane on GRCh38 calls |
+| Folder      | Contents                                                           | Used by                    |
+|-------------|--------------------------------------------------------------------|----------------------------|
+| `grch37/`   | X-CNV annotations and model                                        | X-CNV lane                 |
+| `grch38/`   | GENCODE 50 genes and ClinGen dosage as Parquet, with `sources.tsv` | ACMG/ClinGen lane          |
+| `liftover/` | Ensembl GRCh38 to GRCh37 chain                                     | X-CNV lane on GRCh38 calls |
 
-Score calls with the X-CNV lane:
-
-``` r
-resources <- xcnv_resources("xcnv-resources/grch37", require = "annotations")
-predictions <- predict_cnv(read_cnv("input.bed"), resources)
-write_xcnv(predictions, "predictions.output.csv")
-```
-
-`xcnv_resource_manifest()` lists the required files. `run_xcnv()` does
-the same in one call.
-
-Derive ACMG/ClinGen evidence for GRCh38 calls:
-
-``` r
-con <- DBI::dbConnect(duckdb::duckdb())
-genes <- DBI::dbGetQuery(con, "FROM 'xcnv-resources/grch38/genes.parquet'")
-dosage <- DBI::dbGetQuery(con, "FROM 'xcnv-resources/grch38/dosage.parquet'")
-calls <- data.frame(
-  cnv_id = "sox2-del", chr = "chr3", start = 181700000, end = 181800000,
-  cnv_type = "loss", assembly = "GRCh38"
-)
-evidence <- derive_cnv_2019_evidence(calls, genes, dosage)
-score_cnv_2019(evidence)
-```
-
-On these relations the call above scores 1 point (2A, `SOX2`):
-pathogenic.
+For the X-CNV lane on any CNV, give `run_xcnv()` the full `grch37/`
+folder instead of the case subset. `xcnv_resource_manifest()` lists the
+files that it must contain.
 
 `tools/build_grch38_resources.R` rebuilds `grch38/` from SHA-256-pinned
-sources. `tools/build_grch38_population.R` builds the population
-relation of criterion 4O, `grch38/population.parquet`, from the
-gnomAD-SV 4.1 sites file (CC0 1.0), pinned by SHA-256.
+sources.
+
+## ACMG/ClinGen on GRCh38 calls
+
+The ACMG/ClinGen lane works on GRCh38 directly. This example downloads
+the GRCh38 relations at a fixed revision and checks them against
+`SHA256SUMS`:
+
+``` r
+revision <- "de3f6322e2ff5ee37c5660fdcecda81d37ef0328"
+base <- paste0("https://huggingface.co/datasets/RgenomicsETL/xcnv-resources/resolve/",
+               revision, "/")
+sums <- read.table(url(paste0(base, "SHA256SUMS")), col.names = c("sha256", "path"))
+files <- c("grch38/genes.parquet", "grch38/dosage.parquet")
+local <- file.path(tempdir(), basename(files))
+for (i in seq_along(files)) {
+  download.file(paste0(base, files[[i]]), local[[i]], mode = "wb", quiet = TRUE)
+}
+stopifnot(tools::sha256sum(local) == sums$sha256[match(files, sums$path)])
+
+con <- DBI::dbConnect(duckdb::duckdb())
+genes <- DBI::dbGetQuery(con, "FROM read_parquet(?)", params = list(local[[1]]))
+dosage <- DBI::dbGetQuery(con, "FROM read_parquet(?)", params = list(local[[2]]))
+DBI::dbDisconnect(con)
+```
+
+Four calls: the ClinVar deletion, a loss of the non-coding *TERC* gene,
+and a loss and a gain inside 1p36.33 ClinGen benign regions:
+
+``` r
+calls <- data.frame(
+  cnv_id = c("clinvar-72461", "terc-loss", "1p36.33-loss", "1p36.33-gain"),
+  chr = c("chr3", "chr3", "chr1", "chr1"),
+  start = c(181710886, 169764500, 460000, 790000),
+  end = c(181748657, 169765200, 480000, 810000),
+  cnv_type = c("loss", "loss", "loss", "gain"),
+  assembly = "GRCh38"
+)
+evidence <- derive_cnv_2019_evidence(calls, genes, dosage)
+evidence[, c("cnv_id", "criterion", "score", "evidence_id")]
+#>           cnv_id criterion score                  evidence_id
+#> 1  clinvar-72461        1A   0.0      genes:ENSG00000181449.4
+#> 2  clinvar-72461        3A   0.0                 gene-count:1
+#> 3  clinvar-72461        2A   1.0         dosage:NCBIGene:6657
+#> 4      terc-loss        1A   0.0         dosage:NCBIGene:7012
+#> 5      terc-loss        3A   0.0                 gene-count:0
+#> 6      terc-loss        2A   1.0         dosage:NCBIGene:7012
+#> 7   1p36.33-loss        1B  -0.6                   genes:none
+#> 8   1p36.33-loss        3A   0.0                 gene-count:0
+#> 9   1p36.33-loss        2F  -1.0            dosage:ISCA-46306
+#> 10  1p36.33-gain        1B  -0.6                   genes:none
+#> 11  1p36.33-gain        3A   0.0                 gene-count:0
+#> 12  1p36.33-gain        2D  -1.0 dosage:ISCA-46554,ISCA-46556
+score_cnv_2019(evidence)[, c("cnv_id", "score", "classification")]
+#>          cnv_id score classification
+#> 1  1p36.33-gain  -1.6         benign
+#> 2  1p36.33-loss  -1.6         benign
+#> 3 clinvar-72461   1.0     pathogenic
+#> 4     terc-loss   1.0     pathogenic
+```
 
 ### Sections 1 and 2
 
-`derive_cnv_2019_evidence()` reads the ClinGen dosage relation for
-section 1 and section 2 (Riggs et al. 2020, Tables 1 and 2, and
-Supplemental Material 1). A record is established at score 3 and benign
-at score 40 (“dosage sensitivity unlikely”). A loss reads the
-haploinsufficiency score, a gain the triplosensitivity score. The
-functional genes (`functional_biotypes`, protein-coding by default)
-stand for the standard’s protein-coding genes.
+XCNV reads the ClinGen dosage relation for sections 1 and 2 (Riggs et
+al. 2020, Tables 1 and 2, and Supplemental Material 1). A record is
+established at score 3 and benign at score 40 (“dosage sensitivity
+unlikely”). A loss reads the haploinsufficiency score and a gain reads
+the triplosensitivity score. The functional genes
+(`functional_biotypes`, protein-coding by default) stand for the
+protein-coding genes of the standard.
 
-| Criterion | Points | Rule | Source |
-|----|---:|----|----|
-| 1A | 0 | The CNV overlaps a functional gene, or an established record of either score (`dosage:<ids>`), such as the non-coding *TERC* or *XIST* gene | 1A: “protein-coding or other known functionally important elements” |
-| 1B | -0.60 | Neither | 1B |
-| 2A | 1 | The CNV contains an established record | 2A |
-| Loss 2F | -1 | A benign record contains the loss | Table 1, 2F: “completely contained within an established benign CNV region” |
-| Loss 2G | 0 | The loss overlaps benign records, none contains it | Table 1, 2G |
-| Gain 2C | -1 | The gain has the record’s interval, or crosses one record boundary and holds the record’s genes, at least one, with no breakpoint in a gene | Table 2, 2C: “identical in gene content” |
-| Gain 2D | -1 | The record contains the gain, no breakpoint in a gene | Table 2, 2D |
-| Gain 2E | 0 | The record contains the gain, a breakpoint in a gene | Table 2, 2E |
-| Gain 2F | -1 | The gain contains the record and adds no gene | Table 2, 2F: “larger …, does not include additional protein-coding genes” |
-| Gain 2G | 0 | Any other overlap with a benign record | Table 2, 2G |
+| Criterion | Points | Rule                                                                                                                                                  | Source                                                                      |
+|-----------|-------:|-------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|
+| 1A        |      0 | The CNV overlaps a functional gene or an established record of either score (`dosage:<ids>`), such as the non-coding *TERC* or *XIST* gene            | 1A: “protein-coding or other known functionally important elements”         |
+| 1B        |  -0.60 | Neither                                                                                                                                               | 1B                                                                          |
+| 2A        |      1 | The CNV contains an established record                                                                                                                | 2A                                                                          |
+| Loss 2F   |     -1 | A benign record contains the loss                                                                                                                     | Table 1, 2F: “completely contained within an established benign CNV region” |
+| Loss 2G   |      0 | The loss overlaps benign records, none contains it                                                                                                    | Table 1, 2G                                                                 |
+| Gain 2C   |     -1 | The gain has the interval of the record, or crosses one record boundary and holds the genes of the record, at least one, with no breakpoint in a gene | Table 2, 2C: “identical in gene content”                                    |
+| Gain 2D   |     -1 | The record contains the gain, no breakpoint in a gene                                                                                                 | Table 2, 2D                                                                 |
+| Gain 2E   |      0 | The record contains the gain, a breakpoint in a gene                                                                                                  | Table 2, 2E                                                                 |
+| Gain 2F   |     -1 | The gain contains the record and adds no gene                                                                                                         | Table 2, 2F: “larger …, does not include additional protein-coding genes”   |
+| Gain 2G   |      0 | Any other overlap with a benign record                                                                                                                | Table 2, 2G                                                                 |
 
 Section 3 counts the functional genes only. A CNV gets one benign-record
-row: the record or records with the strongest criterion, in the order
-2C, 2D, 2F, 2E, 2G, give it, and its `evidence_id` is `dosage:<ids>`. A
-gene-free gain matches a record’s gene content only inside it, as for
-4O. The calculator of the ClinGen CNV interface suggests -0.90 for gain
-2F; XCNV uses the published Table 2 default, -1.
+row, from the record or records with the strongest criterion in the
+order 2C, 2D, 2F, 2E, 2G. Its `evidence_id` is `dosage:<ids>`. A
+gene-free gain matches the gene content of a record only inside it. For
+gain 2F, the ClinGen CNV calculator suggests -0.90; XCNV uses the Table
+2 default, -1.
 
 ### Criterion 4O
 
 Criterion 4O is overlap with common population variation (Riggs et
 al. 2020, Supplemental Material 1, categories 4L to 4O).
-`derive_cnv_2019_evidence()` derives it from a `population` relation:
-one row per population record, with its type (`loss` or `gain`) and the
-`frequency` that may support 4O.
+`derive_cnv_2019_evidence()` reads it from a `population` relation: one
+row per population record, with its type (`loss` or `gain`) and its
+`frequency`. `tools/build_grch38_population.R` builds
+`grch38/population.parquet` from the gnomAD-SV 4.1 sites file (CC0 1.0),
+pinned by SHA-256. With that file, the calls above give:
 
-| Rule | Source |
-|----|----|
-| The record has the CNV’s type | Supplement: a common gain does not make a loss benign, and the reverse |
-| The record holds the CNV’s gene content: it contains the CNV’s part of every functional gene that the CNV overlaps, or the whole CNV when it overlaps none | Supplement: the population CNV “includes the same gene content” |
-| A gain that overlaps only part of a functional gene: no automatic 4O row | XCNV policy: BED intervals do not show the effect of a partial-gene gain on its transcripts (supplement, 2I to 2L), so such gains require manual evidence about breakpoints and transcripts |
-| Frequency 1 % or more: -1 | Supplement: “common” is 1 % or more, default points |
-| Frequency above 0.1 % and below 1 %: -0.90 | Supplement: less weight below 1 %; main text: such a CNV is a likely benign example. 0.1 % is the supplement’s “relatively common” frequency (4N); -0.90 is the weight at which 4O alone is likely benign. This reading is XCNV’s |
-| Frequency 0.1 % or less: no row | as above |
-| Frequency above 99 %: row shown, not selected | Supplement: such a frequency can be a reference artifact |
-| A loss over a ClinGen autosomal recessive gene (dosage score 30): row shown, not selected | Supplement: carrier frequencies of recessive disease genes can exceed 1 % |
-| A loss over an established haploinsufficient record: no row | Table 1: skip section 4 after such an overlap |
+``` r
+con <- DBI::dbConnect(duckdb::duckdb())
+population <- DBI::dbGetQuery(con, "FROM 'xcnv-resources/grch38/population.parquet'")
+DBI::dbDisconnect(con)
+evidence <- derive_cnv_2019_evidence(calls, genes, dosage, population = population)
+subset(evidence, criterion == "4O", c(cnv_id, criterion, score, evidence_id))
+#>          cnv_id criterion score                                      evidence_id
+#> 13 1p36.33-gain        4O    -1 population:gnomAD-SV_v3_DUP_chr1_8f980990:0.1827
+score_cnv_2019(evidence)[, c("cnv_id", "score", "classification")]
+#>          cnv_id score classification
+#> 1  1p36.33-gain  -2.6         benign
+#> 2  1p36.33-loss  -1.6         benign
+#> 3 clinvar-72461   1.0     pathogenic
+#> 4     terc-loss   1.0     pathogenic
+```
+
+| Rule                                                                                                                                                                 | Source                                                                                                                                                                                                                                 |
+|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| The record has the type of the CNV                                                                                                                                   | Supplement: a common gain does not make a loss benign, and the reverse                                                                                                                                                                 |
+| The record holds the gene content of the CNV: it contains the part of the CNV in every functional gene that the CNV overlaps, or the whole CNV when it overlaps none | Supplement: the population CNV “includes the same gene content”                                                                                                                                                                        |
+| A gain that overlaps only part of a functional gene: no automatic 4O row                                                                                             | XCNV policy: BED intervals do not show the effect of a partial-gene gain on its transcripts (supplement, 2I to 2L), so such gains require manual evidence about breakpoints and transcripts                                            |
+| Frequency 1 % or more: -1                                                                                                                                            | Supplement: “common” is 1 % or more, default points                                                                                                                                                                                    |
+| Frequency above 0.1 % and below 1 %: -0.90                                                                                                                           | Supplement: less weight below 1 %; main text: such a CNV is a likely benign example. 0.1 % is the “relatively common” frequency of the supplement (4N); -0.90 is the weight at which 4O alone is likely benign. This reading is XCNV’s |
+| Frequency 0.1 % or less: no row                                                                                                                                      | as above                                                                                                                                                                                                                               |
+| Frequency above 99 %: row shown, not selected                                                                                                                        | Supplement: such a frequency can be a reference artifact                                                                                                                                                                               |
+| A loss over a ClinGen autosomal recessive gene (dosage score 30): row shown, not selected                                                                            | Supplement: carrier frequencies of recessive disease genes can exceed 1 %                                                                                                                                                              |
+| A loss over an established haploinsufficient record: no row                                                                                                          | Table 1: skip section 4 after such an overlap                                                                                                                                                                                          |
 
 The record with the highest frequency gives the one row. Its
 `evidence_id` is `population:<record>:<frequency>` and its `model_id` is
-`4o-af0.01-0.001-gene-content`. The gnomAD-SV relation takes as
-`frequency` the highest allele frequency of the continental groups with
-more than 2000 alleles (afr, amr, eas, nfe, sas), the population rule of
+`4o-af0.01-0.001-gene-content`. In the gnomAD-SV relation, `frequency`
+is the highest allele frequency of the continental groups with more than
+2000 alleles (afr, amr, eas, nfe, sas). This is the population rule of
 the ClinGen CNV FAQ, which applies the ClinGen SVI BA1 recommendation
 (Ghosh et al. 2018).
+
+## X-CNV on GRCh38 calls
+
+The X-CNV model and its resources are GRCh37. Declare a liftover to
+score GRCh38 calls: XCNV lifts each call with DuckHTS and scores the
+GRCh37 interval. The chain is the Ensembl GRCh38 to GRCh37 assembly
+mapping, which Ensembl publishes without restriction on use. DuckHTS
+reads it compressed and matches contigs with or without `chr`. The two
+FASTA files must be local, uncompressed or bgzipped, and indexed.
+
+``` r
+liftover <- xcnv_liftover(
+  chain = "xcnv-resources/liftover/GRCh38_to_GRCh37.chain.gz",
+  source_fasta = "Homo_sapiens.GRCh38.dna.primary_assembly.fa",
+  destination_fasta = "human_g1k_v37.fasta",
+  source_assembly = "GRCh38", destination_assembly = "GRCh37",
+  release = "ensembl-76-GRCh38_to_GRCh37"
+)
+grch38 <- data.frame(chr = "chr3", start = 181710886, end = 181748657,
+                     type = "loss", assembly = "GRCh38")
+lifted <- predict_cnv(grch38, example$resources, liftover = liftover)
+lifted[, c("Chr", "Start", "End", "lifted_chr", "lifted_start", "lifted_end",
+           "status", "MVP_score")]
+#>   Chr     Start       End lifted_chr lifted_start lifted_end    status MVP_score
+#> 1   3 181710886 181748657          3    181428674  181466445 supported 0.8537559
+```
+
+The lifted interval is the ClinVar GRCh37 interval, and the score is the
+one from the GRCh37 call above. A call that does not lift to one
+interval on the same contig and strand is `unsupported`, with a
+`liftover_reason` and no `MVP_score`. The chain also maps some GRCh38
+regions to GRCh37 patch contigs (`HG1423_PATCH` and others), which a
+primary GRCh37 FASTA such as `human_g1k_v37` lacks. A call with an end
+in such a region is `unsupported`, with `contig_changed` or
+`end_unmapped`.
 
 ## The model
 
 The published classifier is one tree with 41 nodes. XCNV stores it as a
 small table and evaluates it in R. `tools/stage_xcnv_model.R` rebuilds
 this table from the original XGBoost booster and checks both evaluators
-on 1,024 rows; only that maintainer step needs XGBoost.
+on 1,024 rows. Only that maintainer step needs XGBoost.
 
 ## Citation
 
