@@ -89,11 +89,11 @@ The resources are on Hugging Face at
 [`RgenomicsETL/xcnv-resources`](https://huggingface.co/datasets/RgenomicsETL/xcnv-resources).
 `SHA256SUMS` covers every file.
 
-| Folder      | Contents                                                           | Used by                    |
-|-------------|--------------------------------------------------------------------|----------------------------|
-| `grch37/`   | X-CNV annotations and model                                        | X-CNV lane                 |
-| `grch38/`   | GENCODE 50 genes and ClinGen dosage as Parquet, with `sources.tsv` | ACMG/ClinGen lane          |
-| `liftover/` | Ensembl GRCh38 to GRCh37 chain                                     | X-CNV lane on GRCh38 calls |
+| Folder | Contents | Used by |
+|----|----|----|
+| `grch37/` | X-CNV annotations and model | X-CNV lane |
+| `grch38/` | GENCODE 50 genes and ClinGen dosage as Parquet, with `sources.tsv` | ACMG/ClinGen lane |
+| `liftover/` | Ensembl GRCh38 to GRCh37 chain | X-CNV lane on GRCh38 calls |
 
 For the X-CNV lane on any CNV, give `run_xcnv()` the full `grch37/`
 folder instead of the case subset. `xcnv_resource_manifest()` lists the
@@ -171,18 +171,18 @@ the triplosensitivity score. The functional genes
 (`functional_biotypes`, protein-coding by default) stand for the
 protein-coding genes of the standard.
 
-| Criterion | Points | Rule                                                                                                                                                  | Source                                                                      |
-|-----------|-------:|-------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|
-| 1A        |      0 | The CNV overlaps a functional gene or an established record of either score (`dosage:<ids>`), such as the non-coding *TERC* or *XIST* gene            | 1A: “protein-coding or other known functionally important elements”         |
-| 1B        |  -0.60 | Neither                                                                                                                                               | 1B                                                                          |
-| 2A        |      1 | The CNV contains an established record                                                                                                                | 2A                                                                          |
-| Loss 2F   |     -1 | A benign record contains the loss                                                                                                                     | Table 1, 2F: “completely contained within an established benign CNV region” |
-| Loss 2G   |      0 | The loss overlaps benign records, none contains it                                                                                                    | Table 1, 2G                                                                 |
-| Gain 2C   |     -1 | The gain has the interval of the record, or crosses one record boundary and holds the genes of the record, at least one, with no breakpoint in a gene | Table 2, 2C: “identical in gene content”                                    |
-| Gain 2D   |     -1 | The record contains the gain, no breakpoint in a gene                                                                                                 | Table 2, 2D                                                                 |
-| Gain 2E   |      0 | The record contains the gain, a breakpoint in a gene                                                                                                  | Table 2, 2E                                                                 |
-| Gain 2F   |     -1 | The gain contains the record and adds no gene                                                                                                         | Table 2, 2F: “larger …, does not include additional protein-coding genes”   |
-| Gain 2G   |      0 | Any other overlap with a benign record                                                                                                                | Table 2, 2G                                                                 |
+| Criterion | Points | Rule | Source |
+|----|---:|----|----|
+| 1A | 0 | The CNV overlaps a functional gene or an established record of either score (`dosage:<ids>`), such as the non-coding *TERC* or *XIST* gene | 1A: “protein-coding or other known functionally important elements” |
+| 1B | -0.60 | Neither | 1B |
+| 2A | 1 | The CNV contains an established record | 2A |
+| Loss 2F | -1 | A benign record contains the loss | Table 1, 2F: “completely contained within an established benign CNV region” |
+| Loss 2G | 0 | The loss overlaps benign records, none contains it | Table 1, 2G |
+| Gain 2C | -1 | The gain has the interval of the record, or crosses one record boundary and holds the genes of the record, at least one, with no breakpoint in a gene | Table 2, 2C: “identical in gene content” |
+| Gain 2D | -1 | The record contains the gain, no breakpoint in a gene | Table 2, 2D |
+| Gain 2E | 0 | The record contains the gain, a breakpoint in a gene | Table 2, 2E |
+| Gain 2F | -1 | The gain contains the record and adds no gene | Table 2, 2F: “larger …, does not include additional protein-coding genes” |
+| Gain 2G | 0 | Any other overlap with a benign record | Table 2, 2G |
 
 Section 3 counts the functional genes only. A CNV gets one benign-record
 row, from the record or records with the strongest criterion in the
@@ -217,17 +217,17 @@ score_cnv_2019(evidence)[, c("cnv_id", "score", "classification")]
 #> 4     terc-loss   1.0     pathogenic
 ```
 
-| Rule                                                                                                                                                                 | Source                                                                                                                                                                                                                                 |
-|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| The record has the type of the CNV                                                                                                                                   | Supplement: a common gain does not make a loss benign, and the reverse                                                                                                                                                                 |
-| The record holds the gene content of the CNV: it contains the part of the CNV in every functional gene that the CNV overlaps, or the whole CNV when it overlaps none | Supplement: the population CNV “includes the same gene content”                                                                                                                                                                        |
-| A gain that overlaps only part of a functional gene: no automatic 4O row                                                                                             | XCNV policy: BED intervals do not show the effect of a partial-gene gain on its transcripts (supplement, 2I to 2L), so such gains require manual evidence about breakpoints and transcripts                                            |
-| Frequency 1 % or more: -1                                                                                                                                            | Supplement: “common” is 1 % or more, default points                                                                                                                                                                                    |
-| Frequency above 0.1 % and below 1 %: -0.90                                                                                                                           | Supplement: less weight below 1 %; main text: such a CNV is a likely benign example. 0.1 % is the “relatively common” frequency of the supplement (4N); -0.90 is the weight at which 4O alone is likely benign. This reading is XCNV’s |
-| Frequency 0.1 % or less: no row                                                                                                                                      | as above                                                                                                                                                                                                                               |
-| Frequency above 99 %: row shown, not selected                                                                                                                        | Supplement: such a frequency can be a reference artifact                                                                                                                                                                               |
-| A loss over a ClinGen autosomal recessive gene (dosage score 30): row shown, not selected                                                                            | Supplement: carrier frequencies of recessive disease genes can exceed 1 %                                                                                                                                                              |
-| A loss over an established haploinsufficient record: no row                                                                                                          | Table 1: skip section 4 after such an overlap                                                                                                                                                                                          |
+| Rule | Source |
+|----|----|
+| The record has the type of the CNV | Supplement: a common gain does not make a loss benign, and the reverse |
+| The record holds the gene content of the CNV: it contains the part of the CNV in every functional gene that the CNV overlaps, or the whole CNV when it overlaps none | Supplement: the population CNV “includes the same gene content” |
+| A gain that overlaps only part of a functional gene: no automatic 4O row | XCNV policy: BED intervals do not show the effect of a partial-gene gain on its transcripts (supplement, 2I to 2L), so such gains require manual evidence about breakpoints and transcripts |
+| Frequency 1 % or more: -1 | Supplement: “common” is 1 % or more, default points |
+| Frequency above 0.1 % and below 1 %: -0.90 | Supplement: less weight below 1 %; main text: such a CNV is a likely benign example. 0.1 % is the “relatively common” frequency of the supplement (4N); -0.90 is the weight at which 4O alone is likely benign. This reading is XCNV’s |
+| Frequency 0.1 % or less: no row | as above |
+| Frequency above 99 %: row shown, not selected | Supplement: such a frequency can be a reference artifact |
+| A loss over a ClinGen autosomal recessive gene (dosage score 30): row shown, not selected | Supplement: carrier frequencies of recessive disease genes can exceed 1 % |
+| A loss over an established haploinsufficient record: no row | Table 1: skip section 4 after such an overlap |
 
 The record with the highest frequency gives the one row. Its
 `evidence_id` is `population:<record>:<frequency>` and its `model_id` is
